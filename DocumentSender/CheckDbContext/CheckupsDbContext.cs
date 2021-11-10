@@ -1,5 +1,8 @@
-﻿using DocumentSender.Models.General;
+﻿using DocumentSender.Models.Finance;
+using DocumentSender.Models.General;
 using DocumentSender.Models.Lab;
+using DocumentSender.Models.Registration;
+using DocumentSender.Models.ViewModels;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -30,6 +33,12 @@ namespace DocumentSender.CheckDbContext
         public DbSet<LabTestParticulars> LabTestParticulars { get; set; }
         public DbSet<DocumentsLog> DocumentsLog { get; set; }
         public DbSet<Cycle_idVM> Cycle_Ids { get; set; }
+        public DbSet<EmailPhone> EmailPhones { get; set; }
+        public DbSet<InvoiceParams> InvoiceParams { get; set; }
+        public DbSet<InvoiceItemsList> InvoiceItems { get; set; }
+        public DbSet<ConsentFormVM> ConsentFormVMs { get; set; }
+        public DbSet<OnlinePatient> OnlinePatients { get; set; }
+        public DbSet<Email2> Email2s { get; set; }
         public void SetCommandTimeOut(int timeOut)
         {
             Database.SetCommandTimeout(timeOut);

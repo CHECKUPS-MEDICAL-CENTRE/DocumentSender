@@ -1,3 +1,4 @@
+using AfricasTalkingCS;
 using DocumentSender.Models.ViewModels;
 using DocumentSender.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -13,6 +14,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Mail;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -23,6 +25,9 @@ namespace DocumentSender
         private readonly ILogger<Worker> _logger;
         private readonly IServiceScopeFactory _serviceProvider;
         //private readonly IDocumentingService _documentingService;
+        const string username = "CHECKUPS"; // substitute with your username if mot using sandbox
+        const string apikey = "680045bd234623a6b777e1ef1c5c304bd3add14b76c5661e0b6c1c1b9133aea4";
+        //const string apikey = "eca849d34c4fa0a6cdd4f0fccc3e3975840eca257c00696c1bbfddeae013ec23"; // substitute with your production API key if not using sandbox
 
         public Worker(ILogger<Worker> logger, IServiceScopeFactory serviceProvider)
         {
@@ -34,25 +39,39 @@ namespace DocumentSender
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             using var ct = _serviceProvider.CreateScope();
+            
             //order detail
             var gs = ct.ServiceProvider.GetRequiredService<IGeneralService>();
-            var unsent = await gs.GetUnsentDocuments();
-            foreach (var document in unsent)
-            {
-                if (document.DocumentType == "invoice")
-                    await GenerateInvoice(document.CycleId);
-                else if (document.DocumentType == "covid_cert")
-                {
-                    GenerateQrCode(document.CycleId);
-
-                    await GenerateCovidCertificate(document.CycleId);
-
-                }
-            }
+            
            
 
             while (!stoppingToken.IsCancellationRequested)
             {
+                var unsent = await gs.GetUnsentDocuments();
+                foreach (var document in unsent)
+                {
+                    //if (document.DocumentType == "invoice")
+                    //{
+                    //    await GenerateInvoice(document.CycleId);
+                    //    await gs.UpdateSentCertificate(new object[] { document.CycleId, document.DocumentType });
+                    //}
+                        
+                    if (document.DocumentType == "covid_cert")
+                    {
+                        GenerateQrCode(document.CycleId);
+                        try
+                        {
+                            await GenerateCovidCertificate(document.CycleId);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex.Message);
+                        }
+
+                    }
+                    await gs.UpdateSentCertificate(new object[] { document.CycleId, document.DocumentType });
+
+                }
                 _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
                 await Task.Delay(1000, stoppingToken);
             }
@@ -62,6 +81,7 @@ namespace DocumentSender
             using var ct = _serviceProvider.CreateScope();
             //order detail
             var lab = ct.ServiceProvider.GetRequiredService<ILabDocumentsService>();
+            var gen = ct.ServiceProvider.GetRequiredService<IGeneralService>();
 
             //get test details
             var certDetails = await lab.FetchLabCertDetails(new object[] { cycle_id});
@@ -120,53 +140,73 @@ namespace DocumentSender
             </div>
             <div style='margin: 20px;'>
                 <div class='row'>
-                    <div class='col-md-4'>
-                             <div class='float-left'>
-                    <div class='col-md-4'style='text-align: left;'>
-                        <div><b>PAT NO#</b></div>
-                        <div><b>Invoice#</b></div>
-                        <div><b>Names</b></div>
-                        <div><b>Gender</b></div>
-                        <div><b>Age</b></div>
-                        <div><b>ID/Passport</b></div>
-                        <div><b>ID/Sample</b></div>
-                        
-                    </div>
-                   
-                    <div class='col-md-8'style='text-align: left;'>
-                        <div>: {labCerts.PatientNumber}</div>
-                        <div>: {labCerts.InvoiceNumber}</div>
-                        <div>: {labCerts.PatientName}</div>
-                        <div>: {labCerts.Gender}</div>
-                        <div>: {labCerts.Age}</div>
-                        <div>: {labCerts.IdNumber}</div>
-                     <div>: {labCerts.Sample}</div>
-                    </div>
-                      </div>
+                    <div class='col-md-5'>
+<div class='col-md-12'style='text-align: left;'>
+<table>
+                        <tr>
+                            <td style='width:40%;'><small style='font-weight:800; color:black'>Patient NO#&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.PatientNumber}</small></td>
+                        </tr>
+<tr>
+                            <td style='width:40%;'><small style='font-weight:800; color:black'>Invoice NO:&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.InvoiceNumber}</small></td>
+                        </tr>
+<tr>
+                            <td style='width:40%;'><small style='font-weight:800; color:black'>Name:&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.PatientName}</small></td>
+                        </tr>
+<tr>
+                            <td style='width:40%;'><small style='font-weight:800; color:black'>Gender:&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.Gender}</small></td>
+                        </tr>
+<tr>
+                            <td style='width:40%;'><small style='font-weight:800; color:black'>Age:&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.Age}</small></td>
+                        </tr>
+<tr>
+                            <td style='width:40%;'><small style='font-weight:800;color:black'>ID/Passport:&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.IdNumber}</small></td>
+                        </tr>
+</tr>
+<tr>
+                            <td style='width:40%;'><small style='font-weight:800;color:black'>SAMPLE:&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.Sample}</small></td>
+                        </tr>
+                    </table>
+</div>
                     </div>
 
-                    <div class='col-md-5'>
-                             <div class='float-left'>
-                    <div class='col-md-5'style='text-align: left;'>
-                        <div><b>Lab SN</b></div>
-                        <div><b>Visit Date</b></div>
-                        <div><b>Prescribed By</b></div>
-                        <div><b>Date Requested</b></div>
-                        <div><b>Collection Date</b></div>
-                        <div><b>Report Date</b></div>
+                <div class='col-md-5'>
+<div class='col-md-12'style='text-align: left;'>
+<table>
+                        <tr>
+                            <td style='width:40%;'><small style='font-weight:800; color:black'>Lab SN&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.LabSerial}</small></td>
+                        </tr>
+<tr>
+                            <td style='width:40%;'><small style='font-weight:800; color:black'>Visit Date:&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.VisitDate}</small></td>
+                        </tr>
+<tr>
+                            <td style='width:40%;'><small style='font-weight:800; color:black'>Prescribed By:&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;Dr. Grace Wamaitha</small></td>
+                        </tr>
+<tr>
+                            <td style='width:40%;'><small style='font-weight:800; color:black'>Date Requested:&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.VisitDate}</small></td>
+                        </tr>
+<tr>
+                            <td style='width:40%;'><small style='font-weight:800; color:black'>Collection Date:&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.SampleCollectionTime}</small></td>
+                        </tr>
+<tr>
+                            <td style='width:40%;'><small style='font-weight:800;color:black'>Report Date:&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{DateTime.UtcNow.AddHours(3)}</small></td>
+                        </tr>
+                    </table>
+</div>
                     </div>
-                   
-                    <div class='col-md-7'style='text-align: left;'>
-                        <div>: {labCerts.LabSerial}</div>
-                        <div>: {labCerts.VisitDate}</div>
-                        <div>: Dr. Grace Wamaitha</div>
-                        <div>: {labCerts.VisitDate}</div>
-                        <div>: {labCerts.SampleCollectionTime}</div>
-                        <div>: {DateTime.UtcNow}</div>
-                    </div>
-                      </div>
-                    </div>
-                       <div class='col-md-3'>
+                       <div class='col-md-2'>
                                         <div class='float-left'>
                     <img src='C:\QR\{cycle_id}.png' style='width:100%;'>
                       </div> 
@@ -209,19 +249,41 @@ namespace DocumentSender
                            <h5>{test.Value}</h5> 
                         </div> ";
             }
-                         
 
 
-                  htmlString+=@$" <div style='margin-top: 20px;'>
+
+            htmlString += @$" <div style='margin-top: 20px;'>
                    <p style='margin: 0 !important;'><FONT FACE='Trebuchet MS, serif'><b>Review Notes</b></FONT></p>
-                      <ul>
-                        <li style='margin-bottom: 10px;'>This sample tested {labCerts.TestValue} for SARS-COV-2 virus Antigen</li>
-                        <li style='margin-bottom: 10px;'>Checkups Medical Centre Molecular Lab uses SARS-CoV-2 rapid antigen test device that is  highly sensitive and specific to SARS-CoV-2 virus.</li>
-                        <li style='margin-bottom: 10px;'>This is a screening test, a negative result does not preclude SARS-CoV-2 infection. A repeat test/RT-PCR is recommended if epidemiologically or clinically indicated.
-                        </li>
-                      </ul>
-                  </div>
+                      <ul>";
+            if (labCerts.Investigation.Contains("ANTIGEN"))
+            {
+                htmlString += @$"
+<ul>
+<li style='margin-bottom: 10px;'>This sample tested {testDetails.FirstOrDefault().Test} for SARS-COV-2 virus Antigen</li>
+<li style='margin-bottom: 10px;'>Checkups Medical Centre Molecular Lab uses SARS-CoV-2 rapid antigen test in detection of SARS-CoV-2 highly specific RNA.</li>
+<li style='margin-bottom: 10px;'>Negative results do not preclude SARS-COV-2 infection. False negative results may be encountered in samples collected too early or too late in the clinical course of the infection. A repeat test is recommended if clinically or epidemiologically indicated</li>
+<li style='margin-bottom: 10px;'>According to the MOH guidelines, all suspected cases testing negative may be subjected to further testing and clinical evaluation for SARS-COV-2 if necessary.</li>
+</ul>
 
+";
+
+            }
+            else
+            {
+                htmlString += @$"
+<ul>
+<li style='margin-bottom: 10px;'>This sample tested {labCerts.TestValue} for SARS-COV-2 PCR</li>
+<li style='margin-bottom: 10px;'>Checkups Medical Centre Molecular Lab uses RT-PCR technology in detection of SARS-CoV-2 highly specific RNA.</li>
+<li style='margin-bottom: 10px;'>Negative results do not preclude SARS-COV-2 infection. False negative results may be encountered in samples collected too early or too late in the clinical course of the infection. A repeat test is recommended if clinically or epidemiologically indicated</li>
+<li style='margin-bottom: 10px;'>According to the MOH guidelines, all suspected cases testing negative may be subjected to further testing and clinical evaluation for SARS-COV-2 if necessary.</li>
+</ul>
+";
+            }
+            htmlString +=@$"  
+                  </div>
+<div style='margin-top: 20px;'>
+<p style='margin: 0 !important;'><FONT FACE='Trebuchet MS, serif'><b>NB: </b></FONT>If you are a traveler, you will receive your TT CODE from PANABIOS once your COVID-19 PCR report is ready. If not received kindly contact/WhatsApp +254115879609 our 24hrs service line.</p>
+</div>
                  <div class='row' style='margin-top:70px;'>
 <div class='col-md-4'>
       <div class='row' style='color:black'>
@@ -249,7 +311,7 @@ namespace DocumentSender
         <div class='col-md-4' style='margin: 0 !important;'>
                        <div style='position: relative;text-align: center;margin-top: -30px !important;'>
   <img src='C:/Certificate/Res/stamp.png'style='width:100%;'>
-  <div style='position: absolute;top: 50%;left: 50%;transform: translate(-50%, -50%);'>19-07-2021</div>
+  <div style='position: absolute;top: 50%;left: 50%;transform: translate(-50%, -50%);'>{DateTime.UtcNow.ToString("dd-MM-yyyy")}</div>
 </div>
           </div>
         <div class='col-md-4'>
@@ -298,71 +360,153 @@ namespace DocumentSender
 
 
             PdfDocument doc = converter.ConvertHtmlString(htmlString);
+
+            PdfDocument doc1 = converter.ConvertHtmlString(htmlString);
             // save pdf document
+
+            string fileLocation = @$"E:/Certificates/OneDrive/CovidCerts/AllCerts/{cycle_id}.pdf";                       
+            doc.Save(fileLocation);
             // create memory stream to save PDF
             MemoryStream pdfStream = new MemoryStream();
-            //string fileLocation = @"D:/SysDocs/Zidi/Certificates/invoice.pdf";
-            if (labCerts.TestValue.ToLower() == "positive")
+            doc1.Save(pdfStream);
+            pdfStream.Position = 0;
+            //fetch email
+            var email = await gen.GetEmailPhone(new object[] { cycle_id });
+            //fetch secondary email
+            var email2 = await gen.GetSecondaryEmail(new object[] { email.Email, email.Phone });
+            string body = populateCovidEmailBody(email.Name);
+
+            var gateway = new AfricasTalkingGateway(username, apikey);
+            var phoneRegex = new Regex("^[a-zA-Z0-9 +]*$");
+            string phoneto = email.Phone;
+            string message = @$"Dear {email.Name}, Thank you for choosing Checkups Medical centre for your Covid-19 test. Your report is ready and sent on registered email. For any assistance please call 0111050290";
+            if (phoneRegex.IsMatch(phoneto))
             {
-                doc.Save($"D:/SysDocs/Zidi/Vouchers/" + cycle_id + ".pdf");
+                string custPhone = phoneto.StartsWith('0') ? "+254" + phoneto.Substring(1, 9) : phoneto.StartsWith("7") ? "+254" + phoneto : phoneto.StartsWith("254") ? "+" + phoneto : phoneto;
+                try
+                {
+                    var sms = gateway.SendMessage(custPhone, message, "CHECKUPS");
+                }
+                catch(AfricasTalkingGatewayException exception)
+                {
+
+                }
+                
+                //await rd.UpdateSMSStatus(new object[] { recipient.id });
+            }
+            EmailService emailService = new EmailService();
+            if (email != null && email2 != null)
+            {
+                if (!string.IsNullOrWhiteSpace(email.Email) && !string.IsNullOrWhiteSpace(email2.Email))
+                {
+                    if (labCerts.TestValue.ToLower() == "positive")
+                    {
+                        emailService.SendMessage($"idris.maloba@checkupsmed.com", "", "Covid Test Results " + email.Name, body, pdfStream);
+                        //emailService.SendMessage("idris.maloba@checkupsmed.com", "Positive Covid Test Results " + email.Name, "PFA", pdfStream);
+                    }
+                    else
+                    {
+                        //emailService.SendMessage($"enock.bwana@checkupsmed.com","enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
+                        emailService.SendMessage2($"{email.Email}", $"{email2.Email}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
+                        // emailService.SendMessage(email.Email, "Test Results " + email.Name, "PFA", pdfStream);
+                    }
+
+
+                }
+                else
+                {
+                    //emailService.SendMessage($"enock.bwana@checkupsmed.com", "enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
+                    emailService.SendMessage($"{email.Email}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
+                    //emailService.SendMessage("idris.maloba@checkupsmed.com", " Covid Test Results " + email.Name, "PFA", pdfStream);
+                    //send message
+                }
+
+            }
+
+            else if (email != null && email2 == null)
+            {
+                if (!string.IsNullOrWhiteSpace(email.Email))
+                {
+                    if (labCerts.TestValue.ToLower() == "positive")
+                    {
+                        emailService.SendMessage($"idris.maloba@checkupsmed.com", "", "Covid Test Results " + email.Name, body, pdfStream);
+                        //emailService.SendMessage("idris.maloba@checkupsmed.com", "Positive Covid Test Results " + email.Name, "PFA", pdfStream);
+                    }
+                    else
+                    {
+                        //emailService.SendMessage($"enock.bwana@checkupsmed.com","enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
+                        emailService.SendMessage($"{email.Email}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
+                        // emailService.SendMessage(email.Email, "Test Results " + email.Name, "PFA", pdfStream);
+                    }
+
+
+                }
+                else
+                {
+                    //emailService.SendMessage($"enock.bwana@checkupsmed.com", "enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
+                    emailService.SendMessage($"{email.Email}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
+                    //emailService.SendMessage("idris.maloba@checkupsmed.com", " Covid Test Results " + email.Name, "PFA", pdfStream);
+                    //send message
+                }
             }
             else
             {
-                doc.Save(pdfStream);
-                pdfStream.Position = 0;
-
-                // create email message
-                EmailService emailService = new EmailService();
-                emailService.SendMessage("enock.bwana@checkupsmed.com", "Test Results", "PFA", pdfStream);
+                //emailService.SendMessage($"enock.bwana@checkupsmed.com", "enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
+                emailService.SendMessage($"{email.Email}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
+                //emailService.SendMessage("idris.maloba@checkupsmed.com", " Covid Test Results " + email.Name, "PFA", pdfStream);
             }
-                      // close pdf document
+
+
+            // close pdf document
             doc.Close();
         }
         public async Task GenerateInvoice(string cycle_id)
         {
-            using var ct = _serviceProvider.CreateScope();
-            //order detail
-            var finance = ct.ServiceProvider.GetRequiredService<IFinanceDocumentsService>();
+            try
+            {
+                using var ct = _serviceProvider.CreateScope();
+                //order detail
+                var finance = ct.ServiceProvider.GetRequiredService<IFinanceDocumentsService>();
 
-            var receiptParams = await finance.GetInvoiceDetails(new object[] { cycle_id });
+                var receiptParams = await finance.GetInvoiceDetails(new object[] { cycle_id });
 
-            var receiptItems = await finance.GetLabtestItemsPCR(new object[] { cycle_id});
-            InvoiceParticularsVM invoicex = new InvoiceParticularsVM();
-            invoicex.PatientName = receiptParams.PatientName;
-            invoicex.PatientNumber = receiptParams.PatientNumber;
-            invoicex.DateGenerated = receiptParams.DateGenerated;
-            invoicex.InvoiceNumber = receiptParams.InvoiceNumber;
-            invoicex.InvoiceItems = receiptItems;
-            //pdf generator
-            HtmlToPdf converter = new HtmlToPdf();
-            //// set converter options
-            converter.Options.PdfPageSize = PdfPageSize.A4;
+                var receiptItems = await finance.GetLabtestItemsPCR(new object[] { cycle_id });
+                InvoiceParticularsVM invoicex = new InvoiceParticularsVM();
+                invoicex.PatientName = receiptParams.PatientName;
+                invoicex.PatientNumber = receiptParams.PatientNumber;
+                invoicex.DateGenerated = receiptParams.DateGenerated;
+                invoicex.InvoiceNumber = receiptParams.InvoiceNumber;
+                invoicex.InvoiceItems = receiptItems;
+                //pdf generator
+                HtmlToPdf converter = new HtmlToPdf();
+                //// set converter options
+                converter.Options.PdfPageSize = PdfPageSize.A4;
 
-            // header settings
-            converter.Options.DisplayHeader = true;
-            converter.Header.DisplayOnFirstPage = true;
-            converter.Header.DisplayOnOddPages = true;
-            converter.Header.DisplayOnEvenPages = true;
-            converter.Header.Height = 128;
-            //converter.Options.PdfPageOrientation = pdfOrientation;
-            //converter.Options.WebPageWidth = webPageWidth;
-            //converter.Options.WebPageHeight = webPageHeight;
+                // header settings
+                converter.Options.DisplayHeader = true;
+                converter.Header.DisplayOnFirstPage = true;
+                converter.Header.DisplayOnOddPages = true;
+                converter.Header.DisplayOnEvenPages = true;
+                converter.Header.Height = 128;
+                //converter.Options.PdfPageOrientation = pdfOrientation;
+                //converter.Options.WebPageWidth = webPageWidth;
+                //converter.Options.WebPageHeight = webPageHeight;
 
-            // create a new pdf document converting an html string
-            converter.Options.DisplayFooter = true;
-            converter.Footer.DisplayOnFirstPage = true;
-            converter.Footer.DisplayOnOddPages = true;
-            converter.Footer.DisplayOnEvenPages = true;
-            converter.Footer.Height = 128;
+                // create a new pdf document converting an html string
+                converter.Options.DisplayFooter = true;
+                converter.Footer.DisplayOnFirstPage = true;
+                converter.Footer.DisplayOnOddPages = true;
+                converter.Footer.DisplayOnEvenPages = true;
+                converter.Footer.Height = 128;
 
 
 
-            decimal totalBill = 0;
-            decimal taxTotal = 0;
-            decimal savingsTotal = 0;
-            string htmlString = "";
+                decimal totalBill = 0;
+                decimal taxTotal = 0;
+                decimal savingsTotal = 0;
+                string htmlString = "";
 
-            htmlString += @$"
+                htmlString += @$"
 <!DOCTYPE html>
 <html>
 <head>
@@ -389,7 +533,7 @@ namespace DocumentSender
                         <div><b>IP/OPD No:</b></div>
                     </div>
                     <div class='col-md-4'style='text-align: left;margin-left: -20px;'>
-                        <div>{invoicex.PatientName}</div>
+                        <div style='font-size:12px;'>{invoicex.PatientName}</div>
                         <div>{invoicex.PatientNumber}</div>
                     </div>
                     </div>
@@ -419,9 +563,9 @@ namespace DocumentSender
     </thead>
     <tbody>
     ";
-            foreach (var receiptItem in invoicex.InvoiceItems)
-            {
-                htmlString += @$"
+                foreach (var receiptItem in invoicex.InvoiceItems)
+                {
+                    htmlString += @$"
 <tr>
         <td>{invoicex.DateGenerated}</td>
         <td>{receiptItem.Description}</td>
@@ -433,12 +577,12 @@ namespace DocumentSender
         <td>{receiptItem.Savings}</td>
       </tr>
 ";
-                totalBill += receiptItem.Price;
-                savingsTotal += receiptItem.Savings;
-                taxTotal += receiptItem.VAT;
-            }
+                    totalBill += receiptItem.Price;
+                    savingsTotal += receiptItem.Savings;
+                    taxTotal += receiptItem.VAT;
+                }
 
-            htmlString += @$"</tbody>
+                htmlString += @$"</tbody>
   </table>
 </div>
 
@@ -598,26 +742,46 @@ namespace DocumentSender
 
 
 ";
-            string headerImage = @"C:\Certificate\Res\header.png";
-            PdfImageSection headerImg = new PdfImageSection(0, 0, 594, headerImage);
-            converter.Header.Add(headerImg);
+                string headerImage = @"C:\Certificate\Res\header.png";
+                PdfImageSection headerImg = new PdfImageSection(0, 0, 594, headerImage);
+                converter.Header.Add(headerImg);
 
-            string imgFile = @"C:\Certificate\Res\footer.png";
-            PdfImageSection img = new PdfImageSection(0, 0, 594, imgFile);
-            converter.Footer.Add(img);
-            PdfDocument doc = converter.ConvertHtmlString(htmlString);
+                string imgFile = @"C:\Certificate\Res\footer.png";
+                PdfImageSection img = new PdfImageSection(0, 0, 594, imgFile);
+                converter.Footer.Add(img);
+                PdfDocument doc = converter.ConvertHtmlString(htmlString);
 
-            MemoryStream pdfStream = new MemoryStream();
-            //string fileLocation = @"D:/SysDocs/Zidi/Certificates/invoice.pdf";
-            doc.Save(pdfStream);
-            pdfStream.Position = 0;
+                MemoryStream pdfStream = new MemoryStream();
+                //string fileLocation = @"D:/SysDocs/Zidi/Certificates/invoice.pdf";
+                doc.Save(pdfStream);
+                pdfStream.Position = 0;
 
-            // create email message
-            EmailService emailService = new EmailService();
-            emailService.SendMessage("enock.bwana@checkupsmed.com", "Test Results", "PFA", pdfStream);
+                // create email message
+                EmailService emailService = new EmailService();
+               // emailService.SendMessage("enock.bwana@checkupsmed.com", "Checkups Invoice", "PFA", pdfStream);
 
-            // close pdf document
-            doc.Close();
+                // close pdf document
+                doc.Close();
+            }
+            catch(Exception ex)
+            {
+
+            }
+            
+        }
+        public async Task GenerateConsentForm(string cycle_id)
+        {
+            try
+            {
+                using var ct = _serviceProvider.CreateScope();
+                //order detail
+                var lab = ct.ServiceProvider.GetRequiredService<ILabDocumentsService>();
+            }
+            catch(Exception ex)
+            {
+
+            }
+            
         }
         public void GenerateQrCode(string document_id)
         {
@@ -627,6 +791,16 @@ namespace DocumentSender
             QRCode qRCode = new QRCode(qRCodeData);
             Bitmap bitmap = qRCode.GetGraphic(12);
             bitmap.Save(@"C:\QR\"+ document_id + @".png");           
+        }
+        private string populateCovidEmailBody(string fname)
+        {
+            string body = string.Empty;
+            using (StreamReader reader = new StreamReader(@"C:\EmailFiles\CovidResultEmail.html"))
+            {
+                body = reader.ReadToEnd();
+            }
+            body = body.Replace("{firstname}", fname);
+            return body;
         }
 
     }

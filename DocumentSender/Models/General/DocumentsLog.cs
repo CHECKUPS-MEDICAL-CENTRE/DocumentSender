@@ -27,4 +27,17 @@ namespace DocumentSender.Models.General
         public string CycleId { get; set; }
         public string DocumentType { get; set; }
     }
+    public class EmailPhone
+    {
+        [Key]
+        public string Email { get; set; }
+        public string Phone { get; set; }
+        public string Name { get; set; }
+    }
+    public class Email2
+    {
+        [Key]
+        public string TempId { get; set; }
+        public string Email { get; set; }
+    }
 }

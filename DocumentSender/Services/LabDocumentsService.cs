@@ -1,5 +1,6 @@
 ﻿using DocumentSender.CheckDbContext;
 using DocumentSender.Models.Lab;
+using DocumentSender.Models.ViewModels;
 using DocumentSender.RepositoryMixins;
 using System;
 using System.Collections.Generic;
@@ -37,6 +38,13 @@ inner join sub_lab_test slt on slt.sub_lab_test_id= tr.sub_lab_test_id
 where vc.cycle_id={0} and tr.cycle_id={0} and (tr.cancelled is null or tr.cancelled=0)";
             return await FindOptimisedAsync<LabTestParticulars>(query, args);
         }
+        public async Task<ConsentFormVM> GetConsentForm(object[] args)
+        {
+            string query = @"select * from onlinepatients where ";
+            return await FirstOrDefaultOptimisedAsync<ConsentFormVM>(query, args);
+        }
+
+        
 
         public LabDocumentsService(CheckupsDbContext context) : base(context)
         {
