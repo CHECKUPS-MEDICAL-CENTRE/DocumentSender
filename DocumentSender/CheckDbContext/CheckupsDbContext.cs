@@ -2,6 +2,7 @@
 using DocumentSender.Models.General;
 using DocumentSender.Models.Lab;
 using DocumentSender.Models.Registration;
+using DocumentSender.Models.SubscriptionModels;
 using DocumentSender.Models.ViewModels;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -39,6 +40,8 @@ namespace DocumentSender.CheckDbContext
         public DbSet<ConsentFormVM> ConsentFormVMs { get; set; }
         public DbSet<OnlinePatient> OnlinePatients { get; set; }
         public DbSet<Email2> Email2s { get; set; }
+        public DbSet<TakenTests> TakenTests { get; set; }
+        public DbSet<SubscriptionModelsVM> SubscriptionModels { get; set; }
         public void SetCommandTimeOut(int timeOut)
         {
             Database.SetCommandTimeout(timeOut);

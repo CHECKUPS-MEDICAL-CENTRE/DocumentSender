@@ -27,7 +27,7 @@ namespace DocumentSender.Services
             var smtpClient = new SmtpClient("smtp.gmail.com")
             {
                 Port = 587,
-                Credentials = new NetworkCredential("results@checkupsmed.com", "checkups@123"),
+                Credentials = new NetworkCredential("results@checkupsmed.com", "checkups@123."),
                 EnableSsl = true,
             };
             // send email

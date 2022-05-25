@@ -6,7 +6,10 @@ namespace DocumentSender.Services
 {
     public interface ILabDocumentsService
     {
-        Task<IEnumerable<LabTestParticulars>> FecthLabTestParticulars(object[] args);
+        Task<List<LabTestParticulars>> FecthLabTestParticularsPCR(object[] args);
+        Task<List<LabTestParticulars>> FecthLabTestParticularsAntigen(object[] args);
         Task<LabCertDetails> FetchLabCertDetails(object[] args);
+        Task<IEnumerable<TakenTests>> TestsDone(object[] args);
+        Task SendToErrorLogLab(object[] args);
     }
 }

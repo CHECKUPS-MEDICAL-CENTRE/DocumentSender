@@ -21,6 +21,7 @@ namespace DocumentSender.Models.ViewModels
         public string Investigation { get; set; }
         public DateTime VisitDate { get; set; }
         public DateTime SampleCollectionTime { get; set; }
+        public DateTime DOB { get; set; }
         public string TestValue { get; set; }
         public IEnumerable<LabTestParticulars> labTestParticulars { get; set; }
     }

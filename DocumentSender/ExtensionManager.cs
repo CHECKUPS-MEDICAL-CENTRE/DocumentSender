@@ -1,5 +1,6 @@
 ﻿using DocumentSender.CheckDbContext;
 using DocumentSender.Services;
+using DocumentSender.Services.Subscriptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System;
@@ -17,6 +18,7 @@ namespace DocumentSender
             services.AddScoped<IFinanceDocumentsService, FinanceDocumentsService>();
             services.AddScoped<ILabDocumentsService, LabDocumentsService>();
             services.AddScoped<IGeneralService, GeneralService>();
+            services.AddScoped<IMemberSubscriptionService, MemberSubscriptionService>();
             services.AddDbContextPool<CheckupsDbContext>(options);
 
             return services;

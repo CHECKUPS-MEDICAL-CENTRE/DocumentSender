@@ -1,6 +1,8 @@
 using AfricasTalkingCS;
+using DocumentSender.Models.Lab;
 using DocumentSender.Models.ViewModels;
 using DocumentSender.Services;
+using DocumentSender.Services.Subscriptions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -42,8 +44,8 @@ namespace DocumentSender
             
             //order detail
             var gs = ct.ServiceProvider.GetRequiredService<IGeneralService>();
-            
-           
+            var lb = ct.ServiceProvider.GetRequiredService<ILabDocumentsService>();
+
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -58,69 +60,102 @@ namespace DocumentSender
                         
                     if (document.DocumentType == "covid_cert")
                     {
-                        GenerateQrCode(document.CycleId);
+                       // GenerateQrCode(document.CycleId);
                         try
                         {
-                            await GenerateCovidCertificate(document.CycleId);
+                            //fetch test type
+                            var tests= await lb.TestsDone(new object[] { document.CycleId });
+                            foreach(var testdone in tests)
+                            {
+                                //await GenerateCovidCertificate(document.CycleId, testdone.Test);
+                              //  await GenerateMemberFinancialReport("CHIN00000054", document.CycleId);
+
+                               // await gs.UpdateSentCertificate(new object[] { document.CycleId, document.DocumentType });
+                            }
+                            
                         }
                         catch (Exception ex)
                         {
+                            await gs.SendToErrorLog(new object[] { ex.StackTrace });
                             _logger.LogError(ex.Message);
                         }
 
                     }
-                    await gs.UpdateSentCertificate(new object[] { document.CycleId, document.DocumentType });
+                    else if(document.DocumentType== "Subscription Model")
+                    {
+                        await GenerateMemberFinancialReport("CHIN00000054", "167810");
+                        await gs.UpdateSentCertificate(new object[] { document.CycleId, document.DocumentType });
+                    }
+                    else
+                    {
+                        await gs.UpdateSentCertificate(new object[] { document.CycleId, document.DocumentType });
+                    }
+                   
 
                 }
                 _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
                 await Task.Delay(1000, stoppingToken);
             }
         }
-        public async Task GenerateCovidCertificate(string cycle_id)
+        public async Task GenerateCovidCertificate(string cycle_id, int testtype)
         {
             using var ct = _serviceProvider.CreateScope();
-            //order detail
             var lab = ct.ServiceProvider.GetRequiredService<ILabDocumentsService>();
             var gen = ct.ServiceProvider.GetRequiredService<IGeneralService>();
+            try
+            {
+                
+                //order detail
+               
 
-            //get test details
-            var certDetails = await lab.FetchLabCertDetails(new object[] { cycle_id});
-            var testDetails = await lab.FecthLabTestParticulars(new object[] { cycle_id });
-            LabCertsVM labCerts = new LabCertsVM();
-            labCerts.Age = certDetails.Age;
-            labCerts.Gender = certDetails.Gender;
-            labCerts.IdNumber = certDetails.IdNumber;
-            labCerts.Investigation = certDetails.Investigation;
-            labCerts.InvoiceNumber = certDetails.InvoiceNumber;
-            labCerts.LabSerial = certDetails.LabSerial;
-            labCerts.PatientName = certDetails.PatientName;
-            labCerts.PatientNumber = certDetails.PatientNumber;
-            labCerts.Sample = certDetails.Sample;
-            labCerts.TestValue = certDetails.TestValue;
-            labCerts.VisitDate = certDetails.VisitDate;
-            labCerts.labTestParticulars = testDetails;
-            labCerts.SampleCollectionTime = certDetails.SampleCollectionTime;
+                //get test details
+                var certDetails = await lab.FetchLabCertDetails(new object[] { cycle_id });
+                var testDetails = new List<LabTestParticulars>();
+                if (testtype == 3530)
+                {
+                     testDetails = await lab.FecthLabTestParticularsPCR(new object[] { cycle_id });
+                }
+                else if(testtype == 3558)
+                {
+                     testDetails = await lab.FecthLabTestParticularsAntigen(new object[] { cycle_id });
+                }
+                
+                LabCertsVM labCerts = new LabCertsVM();
+                labCerts.Age = certDetails.Age;
+                labCerts.Gender = certDetails.Gender;
+                labCerts.IdNumber = certDetails.IdNumber;
+                labCerts.Investigation = certDetails.Investigation;
+                labCerts.InvoiceNumber = certDetails.InvoiceNumber;
+                labCerts.LabSerial = certDetails.LabSerial;
+                labCerts.PatientName = certDetails.PatientName;
+                labCerts.PatientNumber = certDetails.PatientNumber;
+                labCerts.Sample = certDetails.Sample;
+                labCerts.TestValue = certDetails.TestValue;
+                labCerts.VisitDate = certDetails.VisitDate;
+                labCerts.labTestParticulars = testDetails;
+                labCerts.SampleCollectionTime = certDetails.SampleCollectionTime;
+                labCerts.DOB = certDetails.DOB;
 
 
-            //pdf generator
-            HtmlToPdf converter = new HtmlToPdf();
-            //// set converter options
-            converter.Options.PdfPageSize = PdfPageSize.A4;
+                //pdf generator
+                HtmlToPdf converter = new HtmlToPdf();
+                //// set converter options
+                converter.Options.PdfPageSize = PdfPageSize.A4;
 
-            // header settings
-            converter.Options.DisplayHeader = true;
-            converter.Header.DisplayOnFirstPage = true;
-            converter.Header.DisplayOnOddPages = true;
-            converter.Header.DisplayOnEvenPages = true;
-            converter.Header.Height = 128;
-            converter.Options.DisplayFooter = true;
-            converter.Footer.DisplayOnFirstPage = true;
-            converter.Footer.DisplayOnOddPages = true;
-            converter.Footer.DisplayOnEvenPages = true;
-            converter.Footer.Height = 128;
+                // header settings
+                converter.Options.DisplayHeader = true;
+                converter.Header.DisplayOnFirstPage = true;
+                converter.Header.DisplayOnOddPages = true;
+                converter.Header.DisplayOnEvenPages = true;
+                converter.Header.Height = 128;
+                converter.Options.DisplayFooter = true;
+                converter.Footer.DisplayOnFirstPage = true;
+                converter.Footer.DisplayOnOddPages = true;
+                converter.Footer.DisplayOnEvenPages = true;
+                converter.Footer.Height = 128;
 
-            string htmlString = "";
-            htmlString += @$"<!DOCTYPE html>
+                string htmlString = "";
+                htmlString += @$"<!DOCTYPE html>
 <html>
 <head>
     <link href='C:\Certificate\Res\style.css' rel='stylesheet'>
@@ -160,8 +195,8 @@ namespace DocumentSender
                             <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.Gender}</small></td>
                         </tr>
 <tr>
-                            <td style='width:40%;'><small style='font-weight:800; color:black'>Age:&nbsp;&nbsp;</small></td>
-                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.Age}</small></td>
+                            <td style='width:40%;'><small style='font-weight:800; color:black'>DOB:&nbsp;&nbsp;</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.DOB.ToString("dd-MM-yyyy")} </small></td>
                         </tr>
 <tr>
                             <td style='width:40%;'><small style='font-weight:800;color:black'>ID/Passport:&nbsp;&nbsp;</small></td>
@@ -185,7 +220,7 @@ namespace DocumentSender
                         </tr>
 <tr>
                             <td style='width:40%;'><small style='font-weight:800; color:black'>Visit Date:&nbsp;&nbsp;</small></td>
-                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.VisitDate}</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.VisitDate.ToString("dd-MM-yyyy")}</small></td>
                         </tr>
 <tr>
                             <td style='width:40%;'><small style='font-weight:800; color:black'>Prescribed By:&nbsp;&nbsp;</small></td>
@@ -193,7 +228,7 @@ namespace DocumentSender
                         </tr>
 <tr>
                             <td style='width:40%;'><small style='font-weight:800; color:black'>Date Requested:&nbsp;&nbsp;</small></td>
-                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.VisitDate}</small></td>
+                            <td style='width:100%'><small>:&nbsp;&nbsp;&nbsp;{labCerts.VisitDate.ToString("dd-MM-yyyy")}</small></td>
                         </tr>
 <tr>
                             <td style='width:40%;'><small style='font-weight:800; color:black'>Collection Date:&nbsp;&nbsp;</small></td>
@@ -227,39 +262,98 @@ namespace DocumentSender
                 </div>
                   </div>
                       <div style='margin: 20px;'>
-                    <div class='row'>
+                   
+               ";
+                if (labCerts.TestValue.ToUpper().Contains("POSITIVE"))
+                {
+                    htmlString += @" <div class='row'>
+                   <div class='col-md-12'>
+                    <div style='border-color:#c6d9f0;border-style: solid;order-width: thin;border-radius:25px; color:Black' class='col-md-12 col-sm-12 panelPart'>
+                        <div class='col-md-4'>
+                          <h4>Analyte</h3>
+                      </div>
+                        <div class='col-md-4'>
+                           <h4>Result</h3> 
+                        </div>
+                       <div class='col-md-4'>
+                           <h4>CT Value</h3> 
+                        </div>
+                    </div>
+                   
+                ";
+                    foreach (var test in testDetails)
+                    {
+
+                        if (test.Value.Contains(":"))
+                        {
+                            string result = test.Value.Split(":")[0];
+                            string ctValue = test.Value.Split(":")[1];
+                            htmlString += @$" 
+                      <div class='col-md-4'>
+                          <h5>{test.Test}</h5>
+                      </div>
+
+                        <div class='col-md-4'>
+                           <h5>{result}</h5> 
+                        </div>
+                        <div class='col-md-4'>
+                           <h5>{ctValue}</h5> 
+                      </div> 
+                        ";
+                        }
+                        else
+                        {
+                            htmlString += @$" <div class='col-md-4'>
+                          <h5>{test.Test}</h5>
+                      </div>
+
+                        <div class='col-md-4'>
+                           <h5>{test.Value}</h5> 
+                        </div>
+                        <div class='col-md-4'>
+                           <h5>.</h5> 
+                      </div> 
+                        ";
+                        }
+                    }
+                }
+                else
+                {
+                    htmlString += @" <div class='row'>
                    <div class='col-md-12'>
                     <div style='border-color:#c6d9f0;border-style: solid;order-width: thin;border-radius:25px; color:Black' class='col-md-12 col-sm-12 panelPart'>
                         <div class='col-md-6'>
-                          <h4>Result</h3>
+                          <h4>Test</h3>
                       </div>
                         <div class='col-md-6'>
-                           <h4>Value</h3> 
+                           <h4>Result</h3> 
                         </div>
                     </div>
-                
-            <div class='col-md-12' style='margin-top: 10px;'>";
-            foreach(var test in testDetails)
-            {
-                htmlString += @$" <div class='col-md-6'>
+                ";
+                    foreach (var test in testDetails)
+                    {
+
+
+                        htmlString += @$" <div class='col-md-6'>
                           <h5>{test.Test}</h5>
                       </div>
 
                         <div class='col-md-6'>
                            <h5>{test.Value}</h5> 
-                        </div> ";
-            }
+                        </div>
+                        ";
 
+                    }
+                }
 
-
-            htmlString += @$" <div style='margin-top: 20px;'>
+                htmlString += @$" <div style='margin-top: 20px;'>
                    <p style='margin: 0 !important;'><FONT FACE='Trebuchet MS, serif'><b>Review Notes</b></FONT></p>
                       <ul>";
-            if (labCerts.Investigation.Contains("ANTIGEN"))
-            {
-                htmlString += @$"
+                if (labCerts.Investigation.Contains("ANTIGEN"))
+                {
+                    htmlString += @$"
 <ul>
-<li style='margin-bottom: 10px;'>This sample tested {testDetails.FirstOrDefault().Test} for SARS-COV-2 virus Antigen</li>
+<li style='margin-bottom: 10px;'>This sample tested {testDetails.FirstOrDefault().Test} for SARS-COV-2 Lateral Flow Rapid Antigen</li>
 <li style='margin-bottom: 10px;'>Checkups Medical Centre Molecular Lab uses SARS-CoV-2 rapid antigen test in detection of SARS-CoV-2 highly specific RNA.</li>
 <li style='margin-bottom: 10px;'>Negative results do not preclude SARS-COV-2 infection. False negative results may be encountered in samples collected too early or too late in the clinical course of the infection. A repeat test is recommended if clinically or epidemiologically indicated</li>
 <li style='margin-bottom: 10px;'>According to the MOH guidelines, all suspected cases testing negative may be subjected to further testing and clinical evaluation for SARS-COV-2 if necessary.</li>
@@ -267,22 +361,22 @@ namespace DocumentSender
 
 ";
 
-            }
-            else
-            {
-                htmlString += @$"
+                }
+                else
+                {
+                    htmlString += @$"
 <ul>
-<li style='margin-bottom: 10px;'>This sample tested {labCerts.TestValue} for SARS-COV-2 PCR</li>
-<li style='margin-bottom: 10px;'>Checkups Medical Centre Molecular Lab uses RT-PCR technology in detection of SARS-CoV-2 highly specific RNA.</li>
+<li style='margin-bottom: 10px;'>This sample tested {labCerts.TestValue.Substring(0, 8)} for SARS-COV-2 PCR. Positive and Negative Controls Passed.</li>
+<li style='margin-bottom: 10px;'>This test was performed using Bio-Rad CFX-96 RT-PCR. The Novel Coronavirus (SARS-CoV-2) Fast Nucleic Acid Detection Kit (PCR-Fluorescence Probing) is a real-time reverse transcription-polymerase chain reaction (RT -PCR) test designed to detect specific ORF1ab and N genes from SARS-CoV-2 in oropharyngeal swabs (CE Registration NL-CA002-2020-49899; FDA Registration 3016754982). </li>
 <li style='margin-bottom: 10px;'>Negative results do not preclude SARS-COV-2 infection. False negative results may be encountered in samples collected too early or too late in the clinical course of the infection. A repeat test is recommended if clinically or epidemiologically indicated</li>
 <li style='margin-bottom: 10px;'>According to the MOH guidelines, all suspected cases testing negative may be subjected to further testing and clinical evaluation for SARS-COV-2 if necessary.</li>
 </ul>
 ";
-            }
-            htmlString +=@$"  
+                }
+                htmlString += @$"  
                   </div>
 <div style='margin-top: 20px;'>
-<p style='margin: 0 !important;'><FONT FACE='Trebuchet MS, serif'><b>NB: </b></FONT>If you are a traveler, you will receive your TT CODE from PANABIOS once your COVID-19 PCR report is ready. If not received kindly contact/WhatsApp +254115879609 our 24hrs service line.</p>
+<p style='margin: 0 !important;'><FONT FACE='Trebuchet MS, serif'><b>NB: </b></FONT>If you are a traveler, you will receive your TT CODE from PANABIOS once your COVID-19 PCR report is ready. If not received kindly call +254111050290 or WhatsApp +254115603423 our 24hrs service line.</p>
 </div>
                  <div class='row' style='margin-top:70px;'>
 <div class='col-md-4'>
@@ -350,115 +444,131 @@ namespace DocumentSender
 
 ";
 
-            string headerImage = @"C:\Certificate\Res\header.png";
-            PdfImageSection headerImg = new PdfImageSection(0, 0, 594, headerImage);
-            converter.Header.Add(headerImg);
+                string headerImage = @"C:\Certificate\Res\header.png";
+                PdfImageSection headerImg = new PdfImageSection(0, 0, 594, headerImage);
+                converter.Header.Add(headerImg);
 
-            string imgFile = @"C:\Certificate\Res\footer.png";
-            PdfImageSection img = new PdfImageSection(0, 0, 594, imgFile);
-            converter.Footer.Add(img);
+                string imgFile = @"C:\Certificate\Res\footer.png";
+                PdfImageSection img = new PdfImageSection(0, 0, 594, imgFile);
+                converter.Footer.Add(img);
 
 
-            PdfDocument doc = converter.ConvertHtmlString(htmlString);
+                PdfDocument doc = converter.ConvertHtmlString(htmlString);
 
-            PdfDocument doc1 = converter.ConvertHtmlString(htmlString);
-            // save pdf document
+                PdfDocument doc1 = converter.ConvertHtmlString(htmlString);
+                // save pdf document
 
-            string fileLocation = @$"E:/Certificates/OneDrive/CovidCerts/AllCerts/{cycle_id}.pdf";                       
-            doc.Save(fileLocation);
-            // create memory stream to save PDF
-            MemoryStream pdfStream = new MemoryStream();
-            doc1.Save(pdfStream);
-            pdfStream.Position = 0;
-            //fetch email
-            var email = await gen.GetEmailPhone(new object[] { cycle_id });
-            //fetch secondary email
-            var email2 = await gen.GetSecondaryEmail(new object[] { email.Email, email.Phone });
-            string body = populateCovidEmailBody(email.Name);
+                string fileLocation = @$"E:/Certificates/OneDrive/CovidCerts/AllCerts/{cycle_id}.pdf";
+                doc.Save(fileLocation);
+                // create memory stream to save PDF
+                MemoryStream pdfStream = new MemoryStream();
+                doc1.Save(pdfStream);
+                pdfStream.Position = 0;
+                //fetch email
+                var email = await gen.GetEmailPhone(new object[] { cycle_id });
+                string body = populateCovidEmailBody(email.Name);
 
-            var gateway = new AfricasTalkingGateway(username, apikey);
-            var phoneRegex = new Regex("^[a-zA-Z0-9 +]*$");
-            string phoneto = email.Phone;
-            string message = @$"Dear {email.Name}, Thank you for choosing Checkups Medical centre for your Covid-19 test. Your report is ready and sent on registered email. For any assistance please call 0111050290";
-            if (phoneRegex.IsMatch(phoneto))
-            {
-                string custPhone = phoneto.StartsWith('0') ? "+254" + phoneto.Substring(1, 9) : phoneto.StartsWith("7") ? "+254" + phoneto : phoneto.StartsWith("254") ? "+" + phoneto : phoneto;
-                try
+                var gateway = new AfricasTalkingGateway(username, apikey);
+                var phoneRegex = new Regex("^[a-zA-Z0-9 +]*$");
+                string phoneto = email.Phone;
+                string message = @$"Dear {email.Name}, Thank you for choosing Checkups Medical centre for your Covid-19 test. Your report is ready and sent on registered email. For any assistance please call 0111050290";
+                if (!labCerts.TestValue.ToLower().Contains("positive"))
                 {
-                    var sms = gateway.SendMessage(custPhone, message, "CHECKUPS");
-                }
-                catch(AfricasTalkingGatewayException exception)
-                {
-
-                }
-                
-                //await rd.UpdateSMSStatus(new object[] { recipient.id });
-            }
-            EmailService emailService = new EmailService();
-            if (email != null && email2 != null)
-            {
-                if (!string.IsNullOrWhiteSpace(email.Email) && !string.IsNullOrWhiteSpace(email2.Email))
-                {
-                    if (labCerts.TestValue.ToLower() == "positive")
+                    if (phoneRegex.IsMatch(phoneto))
                     {
-                        emailService.SendMessage($"idris.maloba@checkupsmed.com", "", "Covid Test Results " + email.Name, body, pdfStream);
-                        //emailService.SendMessage("idris.maloba@checkupsmed.com", "Positive Covid Test Results " + email.Name, "PFA", pdfStream);
-                    }
-                    else
-                    {
-                        //emailService.SendMessage($"enock.bwana@checkupsmed.com","enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
-                        emailService.SendMessage2($"{email.Email}", $"{email2.Email}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
-                        // emailService.SendMessage(email.Email, "Test Results " + email.Name, "PFA", pdfStream);
-                    }
+                        string custPhone = phoneto.StartsWith('0') ? "+254" + phoneto.Substring(1, 9) : phoneto.StartsWith("7") ? "+254" + phoneto : phoneto.StartsWith("254") ? "+" + phoneto : phoneto;
+                        try
+                        {
+                            var sms = gateway.SendMessage(custPhone, message, "CHECKUPS");
+                        }
+                        catch (AfricasTalkingGatewayException exception)
+                        {
 
+                        }
 
+                        //await rd.UpdateSMSStatus(new object[] { recipient.id });
+                    }
                 }
                 else
                 {
-                    //emailService.SendMessage($"enock.bwana@checkupsmed.com", "enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
-                    emailService.SendMessage($"{email.Email}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
-                    //emailService.SendMessage("idris.maloba@checkupsmed.com", " Covid Test Results " + email.Name, "PFA", pdfStream);
-                    //send message
+                    try
+                    {
+                        string mes = @$"{email.Name} is positive. check your email for certificate and contact patient";
+                        var sms = gateway.SendMessage("+254710226738", mes, "CHECKUPS");
+                        var sms2 = gateway.SendMessage("+254705867607", mes, "CHECKUPS");
+                    }
+                    catch (AfricasTalkingGatewayException exception)
+                    {
+
+                    }
                 }
 
-            }
-
-            else if (email != null && email2 == null)
-            {
-                if (!string.IsNullOrWhiteSpace(email.Email))
+                EmailService emailService = new EmailService();
+                if (email != null)
                 {
-                    if (labCerts.TestValue.ToLower() == "positive")
+                    if (!string.IsNullOrWhiteSpace(email.Email) && !string.IsNullOrWhiteSpace(email.Email2))
                     {
-                        emailService.SendMessage($"idris.maloba@checkupsmed.com", "", "Covid Test Results " + email.Name, body, pdfStream);
-                        //emailService.SendMessage("idris.maloba@checkupsmed.com", "Positive Covid Test Results " + email.Name, "PFA", pdfStream);
-                    }
-                    else
-                    {
-                        //emailService.SendMessage($"enock.bwana@checkupsmed.com","enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
-                        emailService.SendMessage($"{email.Email}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
-                        // emailService.SendMessage(email.Email, "Test Results " + email.Name, "PFA", pdfStream);
-                    }
+                        if (labCerts.TestValue.ToLower().Contains("positive"))
+                        {
+                            emailService.SendMessage2($"idris.maloba@checkupsmed.com", "laboratory@checkupsmed.com", "lindsey.moll@checkupsmed.com", "Positive Covid Test Results " + email.Name, body, pdfStream);
+                            //emailService.SendMessage("idris.maloba@checkupsmed.com", "Positive Covid Test Results " + email.Name, "PFA", pdfStream);
+                        }
+                        else
+                        {
+                            //emailService.SendMessage($"enock.bwana@checkupsmed.com","enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
+                            emailService.SendMessage2($"{email.Email}", $"{email.Email2}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
+                            // emailService.SendMessage(email.Email, "Test Results " + email.Name, "PFA", pdfStream);
+                        }
 
+
+                    }
+                    else if (!string.IsNullOrWhiteSpace(email.Email) && string.IsNullOrWhiteSpace(email.Email2))
+                    {
+                        if (labCerts.TestValue.ToLower().Contains("positive"))
+                        {
+                            emailService.SendMessage2($"idris.maloba@checkupsmed.com", "laboratory@checkupsmed.com", "lindsey.moll@checkupsmed.com", "Positive Covid Test Results " + email.Name, body, pdfStream);
+                            //emailService.SendMessage("idris.maloba@checkupsmed.com", "Positive Covid Test Results " + email.Name, "PFA", pdfStream);
+                        }
+                        else
+                        {
+                            //emailService.SendMessage($"enock.bwana@checkupsmed.com","enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
+                            emailService.SendMessage($"{email.Email}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
+                            // emailService.SendMessage(email.Email, "Test Results " + email.Name, "PFA", pdfStream);
+                        }
+                    }
+                    else if (string.IsNullOrWhiteSpace(email.Email) && !string.IsNullOrWhiteSpace(email.Email2))
+                    {
+                        if (labCerts.TestValue.ToLower().Contains("positive"))
+                        {
+                            emailService.SendMessage2($"idris.maloba@checkupsmed.com", "laboratory@checkupsmed.com", "lindsey.moll@checkupsmed.com", "Positive Covid Test Results " + email.Name, body, pdfStream);
+                            //emailService.SendMessage("idris.maloba@checkupsmed.com", "Positive Covid Test Results " + email.Name, "PFA", pdfStream);
+                        }
+                        else
+                        {
+                            //emailService.SendMessage($"enock.bwana@checkupsmed.com","enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
+                            emailService.SendMessage($"{email.Email}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
+                            // emailService.SendMessage(email.Email, "Test Results " + email.Name, "PFA", pdfStream);
+                        }
+                    }
 
                 }
+
                 else
                 {
                     //emailService.SendMessage($"enock.bwana@checkupsmed.com", "enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
-                    emailService.SendMessage($"{email.Email}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
+                    emailService.SendMessage($"laboratory@checkupsmed.com", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
                     //emailService.SendMessage("idris.maloba@checkupsmed.com", " Covid Test Results " + email.Name, "PFA", pdfStream);
-                    //send message
                 }
+
+
+                // close pdf document
+                doc.Close();
             }
-            else
+            catch(Exception ex)
             {
-                //emailService.SendMessage($"enock.bwana@checkupsmed.com", "enockbwana@gmail.com", "Covid Test Results " + email.Name, "PFA", pdfStream);
-                emailService.SendMessage($"{email.Email}", "idris.maloba@checkupsmed.com", "Covid Test Results " + email.Name, body, pdfStream);
-                //emailService.SendMessage("idris.maloba@checkupsmed.com", " Covid Test Results " + email.Name, "PFA", pdfStream);
+                await lab.SendToErrorLogLab(new object[] { ex.Message });
             }
-
-
-            // close pdf document
-            doc.Close();
+            
         }
         public async Task GenerateInvoice(string cycle_id)
         {
@@ -786,7 +896,7 @@ namespace DocumentSender
         public void GenerateQrCode(string document_id)
         {
             QRCodeGenerator qRCodeGenerator = new QRCodeGenerator();
-            string url = "labverification.checkupsmed.com/kenya?id=" + document_id;
+            string url = "https://registrationapi.checkupsmed.com:8002/api/v1/checkups/verification/fetch-cert?cycleId=" + document_id;
             QRCodeData qRCodeData = qRCodeGenerator.CreateQrCode(url, QRCodeGenerator.ECCLevel.Q);
             QRCode qRCode = new QRCode(qRCodeData);
             Bitmap bitmap = qRCode.GetGraphic(12);
@@ -801,6 +911,293 @@ namespace DocumentSender
             }
             body = body.Replace("{firstname}", fname);
             return body;
+        }
+        public async Task GenerateMemberFinancialReport(string memberno,string invoiceno)
+        {
+            using var ct = _serviceProvider.CreateScope();
+            var ms = ct.ServiceProvider.GetRequiredService<IMemberSubscriptionService>();
+            try
+            {
+                //pdf generator
+                HtmlToPdf converter = new HtmlToPdf();
+                //// set converter options
+                converter.Options.PdfPageSize = PdfPageSize.A4;
+
+                // header settings
+                converter.Options.DisplayHeader = true;
+                converter.Header.DisplayOnFirstPage = true;
+                converter.Header.DisplayOnOddPages = true;
+                converter.Header.DisplayOnEvenPages = true;
+                converter.Header.Height = 128;
+                converter.Options.DisplayFooter = true;
+                converter.Footer.DisplayOnFirstPage = true;
+                converter.Footer.DisplayOnOddPages = true;
+                converter.Footer.DisplayOnEvenPages = true;
+                converter.Footer.Height = 128;
+
+                var CDetails = await ms.GetConsultations(new object[] {memberno,invoiceno });
+                var PDetails = await ms.GetPharmacyItems(new object[] { memberno, invoiceno });
+                var DDetails = await ms.GetDiagnostics(new object[] { memberno, invoiceno });
+                var LDetails = await ms.GetLabs(new object[] { memberno, invoiceno });
+
+                string htmlString = @"<!DOCTYPE html>
+<html>
+<head>
+    <link href='C:\patientreport\Res\style.css' rel='stylesheet'>
+    <link href='C:\patientreport\Res\bootsrap.min.css' rel='stylesheet' type='text/css'>
+    <link href='C:\patientreport\Res\Receipt.css' rel='stylesheet' type='text/css'>    
+</head>
+<body>
+     <div class='container'>
+        <div class='panel'>
+            <div class='row'>
+            </div><br />
+               <div style='margin: 20px;'>
+                    <div style='color:Black; text-align:center' class='panelPart'>
+                        <h3><b>MEMBER FINANCIAL REPORT</b></h3>
+                    </div>
+                    <hr style='width:100%;border: none; border-bottom: 2px solid black;' />
+            </div>
+ <div style='margin: 20px;'>
+                <div class='row'>
+                    <div class='col-md-7'>
+                             <div class='float-left'>
+                    <div class='col-md-5'style='text-align: left;'>
+                        <div><b>PATIENT NO#</b></div>
+                        <div><b>NAMES</b></div>
+                        <div><b>DOB</b></div>
+                        <div><b>EMAIL</b></div>
+                        <div><b>PHONE</b></div>                
+                    </div>
+                   
+                    <div class='col-md-7'style='text-align: left;'>
+                        <div>: SGX56627</div>
+                        <div>: Gare Wanyoike</div>
+                        <div>: Male</div>
+                        <div>: Kenyan</div>
+                        <div>: Wamaitha Grace</div>                    
+                    </div>
+                      </div>
+                    </div>
+                    <div class='col-md-5'>
+                                   <div class='float-left'>
+                    <div class='col-md-4'style='text-align: left;'>
+                        <div><b>NATIONALITY</b></div>
+                        <div><b>ADDRESS</b></div>
+						<div><b>PACKAGE</b></div>
+                        <div><b>ENROLLMENT_DATE</b></div>
+                        <div><b>END DATE</b></div>  
+                        <div  style='margin-top:20px'><b>DATE </b></div>  						
+                    </div>
+                   
+                    <div class='col-md-8'style='text-align: left;'>
+                        <div>: 03-03-2000</div>
+                        <div>: 22 Years</div>
+                        <div>: 45663773</div>
+                        <div>: 0705461091</div>
+						<div>: 0705461091</div>
+                        <div style='margin-top:20px'>: 19/05/2021</div>                        
+                    </div>
+                      </div>
+                    </div>                     
+                </div>
+                  </div>
+<div style='margin: 20px;' class='row'>    
+        <div style='color:Black' class='panelPart'>
+                        <h3><b>Subscriptions</b></h3>
+                    </div>		
+  <table class='table table-bordered'>
+    <thead>
+      <tr style='background-color:blue !important;'>
+        <th rowspan='2' colspan='1'>subscriptions</th>
+        <th rowspan='1'colspan='2'>Consumptions</th>
+        <th rowspan='2'colspan='1'>Balance</th>
+        <th rowspan='2'colspan='1'>Savings</th>
+      </tr>
+	  <tr>
+        <th>Billable</th>
+        <th>Non-Billable</th>
+      </tr>
+    </thead>
+<tbody>
+";
+                //consultations
+                if (CDetails != null)
+                {
+                    htmlString += @"
+<tr colspan='5'>
+        <td colspan='5'><h3><b>Consultation</b></h3></td>
+      </tr>
+";
+                    foreach(var det in CDetails)
+                    {
+                        htmlString += @$"
+        <tr>
+        <td>{det.Item}</td>";
+                        if (string.Equals(det.Charges, "Billable"))
+                        {
+                            htmlString += @$"<td>{det.Amount}</td>";
+                            htmlString += @$"<td>0</td>";
+                        }
+                        else
+                        {
+                            htmlString += @$"<td>0</td>";
+                            htmlString += @$"<td>{det.Amount}</td>";
+                            
+                        }
+
+        htmlString+=@$"
+        <td>23.0</td>
+        <td>{det.Savings}</td>
+      </tr>
+";
+                    }
+                }
+
+                //lab
+                if (LDetails != null)
+                {
+                    htmlString += @"
+<tr colspan='5'>
+        <td colspan='5'><h3><b>Laboratory</b></h3></td>
+      </tr>
+";
+                    foreach (var det in LDetails)
+                    {
+                        htmlString += @$"
+        <tr>
+        <td>{det.Item}</td>";
+                        if (string.Equals(det.Charges, "Billable"))
+                        {
+                            htmlString += @$"<td>{det.Amount}</td>";
+                            htmlString += @$"<td>0</td>";
+                        }
+                        else
+                        {
+                            htmlString += @$"<td>0</td>";
+                            htmlString += @$"<td>{det.Amount}</td>";
+
+                        }
+
+                        htmlString += @$"
+        <td>23.0</td>
+        <td>{det.Savings}</td>
+      </tr>
+";
+                    }
+                }
+                //diagnostics
+                if (DDetails != null)
+                {
+                    htmlString += @"
+<tr colspan='5'>
+        <td colspan='5'><h3><b>Diagnostics</b></h3></td>
+      </tr>
+";
+                    foreach (var det in DDetails)
+                    {
+                        htmlString += @$"
+        <tr>
+        <td>{det.Item}</td>";
+                        if (string.Equals(det.Charges, "Billable"))
+                        {
+                            htmlString += @$"<td>{det.Amount}</td>";
+                            htmlString += @$"<td>0</td>";
+                        }
+                        else
+                        {
+                            htmlString += @$"<td>0</td>";
+                            htmlString += @$"<td>{det.Amount}</td>";
+
+                        }
+
+                        htmlString += @$"
+        <td>23.0</td>
+        <td>{det.Savings}</td>
+      </tr>
+";
+                    }
+                }
+                //Pharmacy
+                if (PDetails != null)
+                {
+                    htmlString += @"
+<tr colspan='5'>
+        <td colspan='5'><h3><b>Pharmacy</b></h3></td>
+      </tr>
+";
+                    foreach (var det in PDetails)
+                    {
+                        htmlString += @$"
+        <tr>
+        <td>{det.Item}</td>";
+                        if (string.Equals(det.Charges, "Billable"))
+                        {
+                            htmlString += @$"<td>{det.Amount}</td>";
+                            htmlString += @$"<td>0</td>";
+                        }
+                        else
+                        {
+                            htmlString += @$"<td>0</td>";
+                            htmlString += @$"<td>{det.Amount}</td>";
+
+                        }
+
+                        htmlString += @$"
+        <td>23.0</td>
+        <td>{det.Savings}</td>
+      </tr>
+";
+                    }
+                }
+                //other htmsls
+
+                htmlString += @"
+</div>
+             <div class='row'>
+</div>
+         </div>
+         </div>
+</div>
+</body>
+</html>
+";
+                string headerImage = @"C:\Certificate\Res\header.png";
+                PdfImageSection headerImg = new PdfImageSection(0, 0, 594, headerImage);
+                converter.Header.Add(headerImg);
+
+                string imgFile = @"C:\Certificate\Res\footer.png";
+                PdfImageSection img = new PdfImageSection(0, 0, 594, imgFile);
+                converter.Footer.Add(img);
+
+
+                PdfDocument doc = converter.ConvertHtmlString(htmlString);
+
+                PdfDocument doc1 = converter.ConvertHtmlString(htmlString);
+                // save pdf document
+
+                string fileLocation = @$"D:/Subscription/MemberSubscriptionReports/{invoiceno}.pdf";
+                doc.Save(fileLocation);
+                // create memory stream to save PDF
+                MemoryStream pdfStream = new MemoryStream();
+                doc1.Save(pdfStream);
+                pdfStream.Position = 0;
+                //fetch email
+                //var email = await gen.GetEmailPhone(new object[] { cycle_id });
+                //string body = populateCovidEmailBody(email.Name);
+
+                //var gateway = new AfricasTalkingGateway(username, apikey);
+                //var phoneRegex = new Regex("^[a-zA-Z0-9 +]*$");
+                //string phoneto = email.Phone;
+                //string message = @$"Dear {email.Name}, Thank you for choosing Checkups Medical centre. Your visit financial report is ready and sent on registered email. For any assistance please call 0111050290";
+                //var sms = gateway.SendMessage("+254710226738", message, "CHECKUPS");
+
+
+            }
+            catch(Exception ex)
+            {
+
+            }
         }
 
     }

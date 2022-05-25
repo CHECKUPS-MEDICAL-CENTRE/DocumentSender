@@ -13,4 +13,9 @@ namespace DocumentSender.Models.Lab
         public string Test { get; set; }
         public string Value { get; set; }
     }
+    public class TakenTests
+    {
+        [Key]
+        public int Test { get; set; }
+    }
 }

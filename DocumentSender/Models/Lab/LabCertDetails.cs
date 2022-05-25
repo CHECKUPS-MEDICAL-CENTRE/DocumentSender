@@ -22,5 +22,6 @@ namespace DocumentSender.Models.Lab
         public DateTime VisitDate { get; set; }
         public DateTime SampleCollectionTime { get; set; }
         public string TestValue { get; set; }
+        public DateTime DOB { get; set; }
     }
 }

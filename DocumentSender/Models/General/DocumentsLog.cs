@@ -31,13 +31,13 @@ namespace DocumentSender.Models.General
     {
         [Key]
         public string Email { get; set; }
+        public string Email2 { get; set; }
         public string Phone { get; set; }
         public string Name { get; set; }
     }
     public class Email2
     {
         [Key]
-        public string TempId { get; set; }
         public string Email { get; set; }
     }
 }
