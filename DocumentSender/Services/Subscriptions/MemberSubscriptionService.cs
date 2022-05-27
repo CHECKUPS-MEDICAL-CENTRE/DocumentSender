@@ -75,6 +75,32 @@ item_id,ZidiiTemlink
 ";
             return await FindOptimisedAsync<SubscriptionModelsVM>(query, args);
         }
+        public async Task<IEnumerable<GetVisitsVM>> Getvisits(object[] args)
+        {
+            string query = @"
+select inv.invoice_number, vc.cycle_created_time from visit_cycle vc 
+inner join patient_payment_accounts ppa on ppa.patient_id=vc.patient_id
+inner join invoices inv on inv.cycle_id=vc.cycle_id
+where ppa.account_no={0}
+";
+            return await FindOptimisedAsync<GetVisitsVM>(query, args);
+        }
+        public async Task<GetBalanceVM>GetPharmacyBalance(object[] args)
+        {
+            string query = @"select * from MemberSubscriptionPackages msp
+inner join patient_payment_accounts ppa on ppa.account_no=msp.MemberNumber
+where ppa.account_no={0}";
+            return await FirstOrDefaultOptimisedAsync<GetBalanceVM>(query, args);
+        }
+        public async Task<GetMemberDetails> GetMemberDetails(object[] args)
+        {
+            string query = @"select CONCAT(ua.FirstName,' ',ua.MiddleName,' ',ua.LastName) As Name,ua.MemberNumber,ua.DOB,ua.Email,ua.PhoneNumber,
+ua.Nationality, sp.PackageDescription Package,ua.Gender, ua.Created EnrolledOn
+from UserAccounts ua 
+inner join SubscriptionPackages sp on sp.SubscriptionPackageId=ua.PackageCode
+where ua.MemberNumber={0}";
+            return await FirstOrDefaultOptimisedAsync<GetMemberDetails>(query, args);
+        }
         public MemberSubscriptionService(CheckupsDbContext context) : base(context)
         {
 

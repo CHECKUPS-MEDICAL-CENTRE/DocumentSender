@@ -42,6 +42,9 @@ namespace DocumentSender.CheckDbContext
         public DbSet<Email2> Email2s { get; set; }
         public DbSet<TakenTests> TakenTests { get; set; }
         public DbSet<SubscriptionModelsVM> SubscriptionModels { get; set; }
+        public DbSet<GetVisitsVM> GetVisits { get; set; }
+        public DbSet<GetBalanceVM> GetBalances { get; set; }
+        public DbSet<GetMemberDetails> GetMemberDetails { get; set; }
         public void SetCommandTimeOut(int timeOut)
         {
             Database.SetCommandTimeout(timeOut);

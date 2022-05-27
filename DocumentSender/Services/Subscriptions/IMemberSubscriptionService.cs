@@ -10,5 +10,8 @@ namespace DocumentSender.Services.Subscriptions
         Task<IEnumerable<SubscriptionModelsVM>> GetDiagnostics(object[] args);
         Task<IEnumerable<SubscriptionModelsVM>> GetLabs(object[] args);
         Task<IEnumerable<SubscriptionModelsVM>> GetPharmacyItems(object[] args);
+        Task<IEnumerable<GetVisitsVM>> Getvisits(object[] args);
+        Task<GetBalanceVM> GetPharmacyBalance(object[] args);
+        Task<GetMemberDetails> GetMemberDetails(object[] args);
     }
 }

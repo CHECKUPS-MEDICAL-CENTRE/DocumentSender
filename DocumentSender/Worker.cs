@@ -83,7 +83,7 @@ namespace DocumentSender
                     }
                     else if(document.DocumentType== "Subscription Model")
                     {
-                        await GenerateMemberFinancialReport("CHIN00000054", "167810");
+                        await GenerateMemberFinancialReport("CHIN00000054");
                         await gs.UpdateSentCertificate(new object[] { document.CycleId, document.DocumentType });
                     }
                     else
@@ -912,8 +912,11 @@ namespace DocumentSender
             body = body.Replace("{firstname}", fname);
             return body;
         }
-        public async Task GenerateMemberFinancialReport(string memberno,string invoiceno)
+        public async Task GenerateMemberFinancialReport(string memberno)
         {
+            decimal PharmacyBalance;
+            decimal TotalBillable=0;
+            decimal TotalNonBillable=0;
             using var ct = _serviceProvider.CreateScope();
             var ms = ct.ServiceProvider.GetRequiredService<IMemberSubscriptionService>();
             try
@@ -926,21 +929,17 @@ namespace DocumentSender
                 // header settings
                 converter.Options.DisplayHeader = true;
                 converter.Header.DisplayOnFirstPage = true;
-                converter.Header.DisplayOnOddPages = true;
-                converter.Header.DisplayOnEvenPages = true;
+                converter.Header.DisplayOnOddPages = false;
+                converter.Header.DisplayOnEvenPages = false;
                 converter.Header.Height = 128;
-                converter.Options.DisplayFooter = true;
-                converter.Footer.DisplayOnFirstPage = true;
-                converter.Footer.DisplayOnOddPages = true;
-                converter.Footer.DisplayOnEvenPages = true;
+                converter.Options.DisplayFooter = false;
+                converter.Footer.DisplayOnFirstPage = false;
+                converter.Footer.DisplayOnOddPages = false;
+                converter.Footer.DisplayOnEvenPages = false;
                 converter.Footer.Height = 128;
 
-                var CDetails = await ms.GetConsultations(new object[] {memberno,invoiceno });
-                var PDetails = await ms.GetPharmacyItems(new object[] { memberno, invoiceno });
-                var DDetails = await ms.GetDiagnostics(new object[] { memberno, invoiceno });
-                var LDetails = await ms.GetLabs(new object[] { memberno, invoiceno });
-
-                string htmlString = @"<!DOCTYPE html>
+                var member = await ms.GetMemberDetails(new object[] { memberno });
+                string htmlString = @$"<!DOCTYPE html>
 <html>
 <head>
     <link href='C:\patientreport\Res\style.css' rel='stylesheet'>
@@ -963,7 +962,7 @@ namespace DocumentSender
                     <div class='col-md-7'>
                              <div class='float-left'>
                     <div class='col-md-5'style='text-align: left;'>
-                        <div><b>PATIENT NO#</b></div>
+                        <div><b>MEMBER NO#</b></div>
                         <div><b>NAMES</b></div>
                         <div><b>DOB</b></div>
                         <div><b>EMAIL</b></div>
@@ -971,11 +970,11 @@ namespace DocumentSender
                     </div>
                    
                     <div class='col-md-7'style='text-align: left;'>
-                        <div>: SGX56627</div>
-                        <div>: Gare Wanyoike</div>
-                        <div>: Male</div>
-                        <div>: Kenyan</div>
-                        <div>: Wamaitha Grace</div>                    
+                        <div>: {member.MemberNumber}</div>
+                        <div>: {member.Name}</div>
+                        <div>: {member.DOB.ToShortDateString()}</div>
+                        <div>: {member.Email}</div>
+                        <div>: {member.PhoneNumber}</div>                    
                     </div>
                       </div>
                     </div>
@@ -983,20 +982,16 @@ namespace DocumentSender
                                    <div class='float-left'>
                     <div class='col-md-4'style='text-align: left;'>
                         <div><b>NATIONALITY</b></div>
-                        <div><b>ADDRESS</b></div>
 						<div><b>PACKAGE</b></div>
-                        <div><b>ENROLLMENT_DATE</b></div>
-                        <div><b>END DATE</b></div>  
-                        <div  style='margin-top:20px'><b>DATE </b></div>  						
+                        <div><b>ENROLLED </b></div>
+                        <div><b>END DATE</b></div>  						
                     </div>
                    
                     <div class='col-md-8'style='text-align: left;'>
-                        <div>: 03-03-2000</div>
-                        <div>: 22 Years</div>
-                        <div>: 45663773</div>
-                        <div>: 0705461091</div>
-						<div>: 0705461091</div>
-                        <div style='margin-top:20px'>: 19/05/2021</div>                        
+                        <div>: {member.Nationality}</div>
+                        <div>: {member.Package}</div>
+                        <div>: {member.EnrolledOn.ToShortDateString()}</div>
+						<div>: {member.EnrolledOn.AddYears(1).ToShortDateString()}</div>                     
                     </div>
                       </div>
                     </div>                     
@@ -1021,138 +1016,194 @@ namespace DocumentSender
     </thead>
 <tbody>
 ";
-                //consultations
-                if (CDetails != null)
+
+                var totalVisits = await ms.Getvisits(new object[] { memberno });
+                var pharma = await ms.GetPharmacyBalance(new object[] { memberno });
+                PharmacyBalance = pharma.PharmacyBalance;
+                foreach (var visit in totalVisits)
                 {
-                    htmlString += @"
-<tr colspan='5'>
+                    var CDetails = await ms.GetConsultations(new object[] { memberno, visit.invoice_number });
+                    var PDetails = await ms.GetPharmacyItems(new object[] { memberno, visit.invoice_number });
+                    var DDetails = await ms.GetDiagnostics(new object[] { memberno, visit.invoice_number });
+                    var LDetails = await ms.GetLabs(new object[] { memberno, visit.invoice_number });
+
+
+
+                    //consultations
+                    if (CDetails.Count()>0)
+                    {
+                        htmlString += @$"
+      <tr colspan='5' style='background-color:#022c5b !important;color:white !important'>
+        <td colspan='5' style='color:white !important'><b>Date: {visit.cycle_created_time}</b></td>
+      </tr>
+     <tr colspan='5'>
         <td colspan='5'><h3><b>Consultation</b></h3></td>
       </tr>
 ";
-                    foreach(var det in CDetails)
-                    {
-                        htmlString += @$"
+                        foreach (var det in CDetails)
+                        {
+                            htmlString += @$"
         <tr>
         <td>{det.Item}</td>";
-                        if (string.Equals(det.Charges, "Billable"))
-                        {
-                            htmlString += @$"<td>{det.Amount}</td>";
-                            htmlString += @$"<td>0</td>";
-                        }
-                        else
-                        {
-                            htmlString += @$"<td>0</td>";
-                            htmlString += @$"<td>{det.Amount}</td>";
-                            
-                        }
+                            if (string.Equals(det.Charges, "Billable"))
+                            {
+                                TotalBillable += det.Amount;
+                                htmlString += @$"<td>{det.Amount}</td>";
+                                htmlString += @$"<td>0</td>";
+                            }
+                            else
+                            {
+                                TotalNonBillable += det.Amount;
+                                htmlString += @$"<td>0</td>";
+                                htmlString += @$"<td>{det.Amount}</td>";
 
-        htmlString+=@$"
+                            }
+
+                            htmlString += @$"
         <td>23.0</td>
         <td>{det.Savings}</td>
       </tr>
 ";
+                        }
                     }
-                }
 
-                //lab
-                if (LDetails != null)
-                {
-                    htmlString += @"
+                    //lab
+                    if (LDetails.Count() > 0)
+                    {
+                        htmlString += @"
 <tr colspan='5'>
         <td colspan='5'><h3><b>Laboratory</b></h3></td>
       </tr>
 ";
-                    foreach (var det in LDetails)
-                    {
-                        htmlString += @$"
+                        foreach (var det in LDetails)
+                        {
+                            htmlString += @$"
         <tr>
         <td>{det.Item}</td>";
-                        if (string.Equals(det.Charges, "Billable"))
-                        {
-                            htmlString += @$"<td>{det.Amount}</td>";
-                            htmlString += @$"<td>0</td>";
-                        }
-                        else
-                        {
-                            htmlString += @$"<td>0</td>";
-                            htmlString += @$"<td>{det.Amount}</td>";
+                            if (string.Equals(det.Charges, "Billable"))
+                            {
+                                TotalBillable += det.Amount;
+                                htmlString += @$"<td>{det.Amount}</td>";
+                                htmlString += @$"<td>0</td>";
+                            }
+                            else
+                            {
+                                TotalNonBillable += det.Amount;
+                                htmlString += @$"<td>0</td>";
+                                htmlString += @$"<td>{det.Amount}</td>";
 
-                        }
+                            }
 
-                        htmlString += @$"
+                            htmlString += @$"
         <td>23.0</td>
         <td>{det.Savings}</td>
       </tr>
 ";
+                        }
                     }
-                }
-                //diagnostics
-                if (DDetails != null)
-                {
-                    htmlString += @"
+                    //diagnostics
+                    if (DDetails.Count() > 0)
+                    {
+                        htmlString += @"
 <tr colspan='5'>
         <td colspan='5'><h3><b>Diagnostics</b></h3></td>
       </tr>
 ";
-                    foreach (var det in DDetails)
-                    {
-                        htmlString += @$"
+                        foreach (var det in DDetails)
+                        {
+                            htmlString += @$"
         <tr>
         <td>{det.Item}</td>";
-                        if (string.Equals(det.Charges, "Billable"))
-                        {
-                            htmlString += @$"<td>{det.Amount}</td>";
-                            htmlString += @$"<td>0</td>";
-                        }
-                        else
-                        {
-                            htmlString += @$"<td>0</td>";
-                            htmlString += @$"<td>{det.Amount}</td>";
+                            if (string.Equals(det.Charges, "Billable"))
+                            {
+                                TotalBillable += det.Amount;
+                                htmlString += @$"<td>{det.Amount}</td>";
+                                htmlString += @$"<td>0</td>";
+                            }
+                            else
+                            {
+                                TotalNonBillable += det.Amount;
+                                htmlString += @$"<td>0</td>";
+                                htmlString += @$"<td>{det.Amount}</td>";
 
-                        }
+                            }
 
-                        htmlString += @$"
+                            htmlString += @$"
         <td>23.0</td>
         <td>{det.Savings}</td>
       </tr>
 ";
+                        }
                     }
-                }
-                //Pharmacy
-                if (PDetails != null)
-                {
-                    htmlString += @"
+                    //Pharmacy
+                    if (PDetails.Count() > 0)
+                    {
+                        htmlString += @"
 <tr colspan='5'>
         <td colspan='5'><h3><b>Pharmacy</b></h3></td>
       </tr>
 ";
-                    foreach (var det in PDetails)
-                    {
-                        htmlString += @$"
+                        foreach (var det in PDetails)
+                        {
+                            PharmacyBalance += det.Amount;
+                            htmlString += @$"
         <tr>
         <td>{det.Item}</td>";
-                        if (string.Equals(det.Charges, "Billable"))
-                        {
-                            htmlString += @$"<td>{det.Amount}</td>";
-                            htmlString += @$"<td>0</td>";
-                        }
-                        else
-                        {
-                            htmlString += @$"<td>0</td>";
-                            htmlString += @$"<td>{det.Amount}</td>";
+                            if (string.Equals(det.Charges, "Billable"))
+                            {
+                                TotalBillable -= det.Amount;
+                                htmlString += @$"<td>{det.Amount}</td>";
+                                htmlString += @$"<td>0</td>";
+                            }
+                            else
+                            {
+                                TotalNonBillable += det.Amount;
+                                htmlString += @$"<td>0</td>";
+                                htmlString += @$"<td>{det.Amount}</td>";
 
-                        }
+                            }
 
-                        htmlString += @$"
-        <td>23.0</td>
+                            htmlString += @$"
+        <td>{PharmacyBalance}</td>
         <td>{det.Savings}</td>
       </tr>
 ";
+                        }
                     }
                 }
+
+               
                 //other htmsls
 
-                htmlString += @"
+                htmlString += @$"
+
+ <tr>
+        <td colspan='5'></td>
+      </tr>
+	       <tr>
+        <td><h5><b>Payable</h5></b></td>
+        <td colspan='4'><b>{TotalBillable}</b></td>
+      </tr>
+	        <tr>
+        <td colspan='2'><h5><b>Non Payable</h5></b></td>
+        <td colspan='3'><b>{TotalNonBillable}</b></td>
+      </tr>
+	  
+	    <tr >
+        <td rowspan='2' colspan='1'><h5><b>Balance</h5></b></td>
+        <td rowspan='1'colspan='2'>Pharmacy</td>
+        <td rowspan='1'colspan='2'><b>{PharmacyBalance}</b></td>
+      </tr>
+	  <tr>
+        <td colspan='2'> Non Pharmacy</td>
+		<td rowspan='1'colspan='2'><b>N/A</b></td>
+      </tr>
+         </tbody>
+  </table>
+</div>
+
+
+
 </div>
              <div class='row'>
 </div>
@@ -1176,7 +1227,7 @@ namespace DocumentSender
                 PdfDocument doc1 = converter.ConvertHtmlString(htmlString);
                 // save pdf document
 
-                string fileLocation = @$"D:/Subscription/MemberSubscriptionReports/{invoiceno}.pdf";
+                string fileLocation = @$"D:/Subscription/MemberSubscriptionReports/{memberno}.pdf";
                 doc.Save(fileLocation);
                 // create memory stream to save PDF
                 MemoryStream pdfStream = new MemoryStream();

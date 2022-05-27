@@ -18,4 +18,28 @@ namespace DocumentSender.Models.SubscriptionModels
         public string Charges { get; set; }
         public decimal Savings { get; set; }
     }
+    public class GetVisitsVM
+    {
+        [Key]
+        public string invoice_number { get; set; }
+        public DateTime cycle_created_time { get; set; }
+    }
+    public class GetBalanceVM
+    {
+        [Key]
+        public decimal PharmacyBalance { get; set; }
+    }
+    public class GetMemberDetails
+    {
+        [Key]
+        public string MemberNumber { get; set; }
+        public string Name { get; set; }
+        public DateTime DOB { get; set; }
+        public string Email { get; set; }
+        public string PhoneNumber { get; set; }
+        public string Nationality { get; set; }
+        public string Package { get; set; }
+        public DateTime EnrolledOn { get; set; }
+        public string Gender { get; set; }
+    }
 }
