@@ -45,6 +45,8 @@ namespace DocumentSender.CheckDbContext
         public DbSet<GetVisitsVM> GetVisits { get; set; }
         public DbSet<GetBalanceVM> GetBalances { get; set; }
         public DbSet<GetMemberDetails> GetMemberDetails { get; set; }
+        public DbSet<PatientDetailsVM> PatientDetailsVMs { get; set; }
+        public DbSet<ChargeItemsVM> PatientChargeItemsVM { get; set; }
         public void SetCommandTimeOut(int timeOut)
         {
             Database.SetCommandTimeout(timeOut);

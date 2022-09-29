@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "MaYMCqgstHURZGHkNAwP/W00YbWrNep9jPIhtmPLREB6Le9Z+2CXjjdOX3M/s0RnWhT6cLm//diA0QqcMdAV+g==",
+  "dgSpecHash": "OYRnqNYD9cakf/qQsDV7FGfdvCGuyTpxVWA6fzZUYz/CpQa9B8+FPaXXuaomqQOArVrZSWSAdRuCDFTAiIIPDg==",
   "success": true,
   "projectFilePath": "D:\\Checkups\\DocumentSender\\DocumentSender\\DocumentSender.csproj",
   "expectedPackageFiles": [
@@ -177,7 +177,8 @@
     "C:\\Users\\Basigwa\\.nuget\\packages\\system.xml.readerwriter\\4.3.0\\system.xml.readerwriter.4.3.0.nupkg.sha512",
     "C:\\Users\\Basigwa\\.nuget\\packages\\system.xml.xdocument\\4.3.0\\system.xml.xdocument.4.3.0.nupkg.sha512",
     "C:\\Users\\Basigwa\\.nuget\\packages\\system.xml.xmldocument\\4.3.0\\system.xml.xmldocument.4.3.0.nupkg.sha512",
-    "C:\\Users\\Basigwa\\.nuget\\packages\\system.xml.xmlserializer\\4.3.0\\system.xml.xmlserializer.4.3.0.nupkg.sha512"
+    "C:\\Users\\Basigwa\\.nuget\\packages\\system.xml.xmlserializer\\4.3.0\\system.xml.xmlserializer.4.3.0.nupkg.sha512",
+    "C:\\Users\\Basigwa\\.nuget\\packages\\microsoft.netcore.app.host.win-x64\\5.0.15\\microsoft.netcore.app.host.win-x64.5.0.15.nupkg.sha512"
   ],
   "logs": []
 }

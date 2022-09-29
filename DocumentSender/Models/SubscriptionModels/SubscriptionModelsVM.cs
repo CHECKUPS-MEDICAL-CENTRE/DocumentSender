@@ -18,6 +18,16 @@ namespace DocumentSender.Models.SubscriptionModels
         public string Charges { get; set; }
         public decimal Savings { get; set; }
     }
+    public class ChargeItemsVM
+    {
+        [Key]
+        public string Invoice { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal Amount { get; set; }
+        public string Category { get; set; }
+        public string Item { get; set; }
+        public decimal Savings { get; set; }
+    }
     public class GetVisitsVM
     {
         [Key]
@@ -28,6 +38,7 @@ namespace DocumentSender.Models.SubscriptionModels
     {
         [Key]
         public decimal PharmacyBalance { get; set; }
+        public int SubscriptionPackageId { get; set; }
     }
     public class GetMemberDetails
     {
@@ -40,6 +51,17 @@ namespace DocumentSender.Models.SubscriptionModels
         public string Nationality { get; set; }
         public string Package { get; set; }
         public DateTime EnrolledOn { get; set; }
+        public string Gender { get; set; }
+    }
+    public class PatientDetailsVM
+    {
+        [Key]
+        public string PatNo { get; set; }
+        public string Name { get; set; }
+        public DateTime DOB { get; set; }
+        public string Email { get; set; }
+        public string PhoneNumber { get; set; }
+        public string Nationality { get; set; }
         public string Gender { get; set; }
     }
 }

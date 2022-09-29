@@ -83,7 +83,12 @@ namespace DocumentSender
                     }
                     else if(document.DocumentType== "Subscription Model")
                     {
-                        await GenerateMemberFinancialReport("CHIN00000054");
+                        await GenerateMemberFinancialReport(document.CycleId);
+                        await gs.UpdateSentCertificate(new object[] { document.CycleId, document.DocumentType });
+                    }
+                    else if (document.DocumentType == "Patient Usage")
+                    {
+                        await GeneratePatientUtilizationReport(document.CycleId);
                         await gs.UpdateSentCertificate(new object[] { document.CycleId, document.DocumentType });
                     }
                     else
@@ -1010,39 +1015,42 @@ namespace DocumentSender
         <th rowspan='2'colspan='1'>Savings</th>
       </tr>
 	  <tr>
-        <th>Billable</th>
         <th>Non-Billable</th>
+        <th>Billable</th>
       </tr>
     </thead>
 <tbody>
 ";
 
                 var totalVisits = await ms.Getvisits(new object[] { memberno });
+
                 var pharma = await ms.GetPharmacyBalance(new object[] { memberno });
                 PharmacyBalance = pharma.PharmacyBalance;
                 foreach (var visit in totalVisits)
                 {
-                    var CDetails = await ms.GetConsultations(new object[] { memberno, visit.invoice_number });
-                    var PDetails = await ms.GetPharmacyItems(new object[] { memberno, visit.invoice_number });
-                    var DDetails = await ms.GetDiagnostics(new object[] { memberno, visit.invoice_number });
-                    var LDetails = await ms.GetLabs(new object[] { memberno, visit.invoice_number });
+                    htmlString += @$"
+      <tr colspan='5' style='background-color:#022c5b !important;color:white !important'>
+        <td colspan='5' style='color:white !important'><b>Date: {visit.cycle_created_time}</b></td>
+      </tr>
+
+";
+                    var CDetails = await ms.GetConsultations(new object[] { memberno, visit.invoice_number,pharma.SubscriptionPackageId });
+                    var PDetails = await ms.GetPharmacyItems(new object[] { memberno, visit.invoice_number,pharma.SubscriptionPackageId });
+                    var DDetails = await ms.GetDiagnostics(new object[] { memberno, visit.invoice_number, pharma.SubscriptionPackageId });
+                    var LDetails = await ms.GetLabs(new object[] { memberno, visit.invoice_number,pharma.SubscriptionPackageId });
 
 
 
                     //consultations
                     if (CDetails.Count()>0)
                     {
-                        htmlString += @$"
-      <tr colspan='5' style='background-color:#022c5b !important;color:white !important'>
-        <td colspan='5' style='color:white !important'><b>Date: {visit.cycle_created_time}</b></td>
-      </tr>
-     <tr colspan='5'>
-        <td colspan='5'><h3><b>Consultation</b></h3></td>
-      </tr>
-";
+
                         foreach (var det in CDetails)
                         {
                             htmlString += @$"
+     <tr colspan='5'>
+        <td colspan='5'><h3><b>Consultation</b></h3></td>
+      </tr>
         <tr>
         <td>{det.Item}</td>";
                             if (string.Equals(det.Charges, "Billable"))
@@ -1060,8 +1068,8 @@ namespace DocumentSender
                             }
 
                             htmlString += @$"
-        <td>23.0</td>
-        <td>{det.Savings}</td>
+        <td>-</td>
+        <td>1500</td>
       </tr>
 ";
                         }
@@ -1095,7 +1103,7 @@ namespace DocumentSender
                             }
 
                             htmlString += @$"
-        <td>23.0</td>
+        <td>-</td>
         <td>{det.Savings}</td>
       </tr>
 ";
@@ -1129,8 +1137,8 @@ namespace DocumentSender
                             }
 
                             htmlString += @$"
-        <td>23.0</td>
-        <td>{det.Savings}</td>
+        <td>-</td>
+        <td>{det.Savings+det.Amount}</td>
       </tr>
 ";
                         }
@@ -1145,7 +1153,7 @@ namespace DocumentSender
 ";
                         foreach (var det in PDetails)
                         {
-                            PharmacyBalance += det.Amount;
+                            PharmacyBalance -= det.Amount;
                             htmlString += @$"
         <tr>
         <td>{det.Item}</td>";
@@ -1181,11 +1189,11 @@ namespace DocumentSender
         <td colspan='5'></td>
       </tr>
 	       <tr>
-        <td><h5><b>Payable</h5></b></td>
-        <td colspan='4'><b>{TotalBillable}</b></td>
+        <td><h5><b>Non Payable</h5></b></td>
+        <td colspan='4'><b>#</b></td>
       </tr>
 	        <tr>
-        <td colspan='2'><h5><b>Non Payable</h5></b></td>
+        <td colspan='2'><h5><b>Payable</h5></b></td>
         <td colspan='3'><b>{TotalNonBillable}</b></td>
       </tr>
 	  
@@ -1227,7 +1235,7 @@ namespace DocumentSender
                 PdfDocument doc1 = converter.ConvertHtmlString(htmlString);
                 // save pdf document
 
-                string fileLocation = @$"D:/Subscription/MemberSubscriptionReports/{memberno}.pdf";
+                string fileLocation = @$"E:/Subscription/MemberSubscriptionReports/{memberno}.pdf";
                 doc.Save(fileLocation);
                 // create memory stream to save PDF
                 MemoryStream pdfStream = new MemoryStream();
@@ -1246,6 +1254,303 @@ namespace DocumentSender
 
             }
             catch(Exception ex)
+            {
+
+            }
+        }
+        public async Task GeneratePatientUtilizationReport(string patientNumber)
+        {
+            decimal TotalBillable = 0;
+            decimal TotalNonBillable = 0;
+            using var ct = _serviceProvider.CreateScope();
+            var ms = ct.ServiceProvider.GetRequiredService<IMemberSubscriptionService>();
+            try
+            {
+                //pdf generator
+                HtmlToPdf converter = new HtmlToPdf();
+                //// set converter options
+                converter.Options.PdfPageSize = PdfPageSize.A4;
+
+                // header settings
+                converter.Options.DisplayHeader = true;
+                converter.Header.DisplayOnFirstPage = true;
+                converter.Header.DisplayOnOddPages = false;
+                converter.Header.DisplayOnEvenPages = false;
+                converter.Header.Height = 128;
+                converter.Options.DisplayFooter = false;
+                converter.Footer.DisplayOnFirstPage = false;
+                converter.Footer.DisplayOnOddPages = false;
+                converter.Footer.DisplayOnEvenPages = false;
+                converter.Footer.Height = 128;
+
+                var member = await ms.GetPatientDetails(new object[] { patientNumber });
+                string htmlString = @$"<!DOCTYPE html>
+<html>
+<head>
+    <link href='C:\patientreport\Res\style.css' rel='stylesheet'>
+    <link href='C:\patientreport\Res\bootsrap.min.css' rel='stylesheet' type='text/css'>
+    <link href='C:\patientreport\Res\Receipt.css' rel='stylesheet' type='text/css'>    
+</head>
+<body>
+     <div class='container'>
+        <div class='panel'>
+            <div class='row'>
+            </div><br />
+               <div style='margin: 20px;'>
+                    <div style='color:Black; text-align:center' class='panelPart'>
+                        <h3><b>PATIENT USAGE</b></h3>
+                    </div>
+                    <hr style='width:100%;border: none; border-bottom: 2px solid black;' />
+            </div>
+ <div style='margin: 20px;'>
+                <div class='row'>
+                    <div class='col-md-7'>
+                             <div class='float-left'>
+                    <div class='col-md-5'style='text-align: left;'>
+                        <div><b>PAT NO#</b></div>
+                        <div><b>NAMES</b></div>
+                        <div><b>DOB</b></div>
+                        <div><b>EMAIL</b></div>
+                        <div><b>PHONE</b></div>                
+                    </div>
+                   
+                    <div class='col-md-7'style='text-align: left;'>
+                        <div>: {member.PatNo}</div>
+                        <div>: {member.Name}</div>
+                        <div>: {member.DOB.ToShortDateString()}</div>
+                        <div>: {member.Email}</div>
+                        <div>: {member.PhoneNumber}</div>                    
+                    </div>
+                      </div>
+                    </div>
+                    <div class='col-md-5'>
+                                   <div class='float-left'>
+                    <div class='col-md-4'style='text-align: left;'>
+                        <div><b>NATIONALITY</b></div>
+						<div><b>PACKAGE</b></div>
+                        <div><b>ENROLLED </b></div>
+                        <div><b>END DATE</b></div>  						
+                    </div>
+                   
+                    <div class='col-md-8'style='text-align: left;'>
+                        <div>: {member.Nationality}</div>
+                        <div>: NA</div>
+                        <div>: NA</div>
+						<div>: NA</div>                     
+                    </div>
+                      </div>
+                    </div>                     
+                </div>
+                  </div>
+<div style='margin: 20px;' class='row'>    
+        <div style='color:Black' class='panelPart'>
+                    </div>		
+  <table class='table table-bordered'>
+    <thead>
+      <tr style='background-color:blue !important;'>
+        <th rowspan='2' colspan='1'>Item</th>
+        <th rowspan='1'colspan='2'>Consumptions</th>
+        <th rowspan='2'colspan='1'>Balance</th>
+        <th rowspan='2'colspan='1'>Savings</th>
+      </tr>
+	  <tr>
+        <th>Non-Billable</th>
+        <th>Billable</th>
+      </tr>
+    </thead>
+<tbody>
+";
+
+                var totalVisits = await ms.GetPatientvisits(new object[] { patientNumber });
+
+                //var pharma = await ms.GetPharmacyBalance(new object[] { patientNumber });
+               // PharmacyBalance = pharma.PharmacyBalance;
+                foreach (var visit in totalVisits)
+                {
+                    htmlString += @$"
+      <tr colspan='5' style='background-color:#022c5b !important;color:white !important'>
+        <td colspan='5' style='color:white !important'><b>Date: {visit.cycle_created_time}</b></td>
+      </tr>
+
+";
+                    var CDetails = await ms.GetPatientConsultations(new object[] { patientNumber, visit.invoice_number });
+                    var PDetails = await ms.GetPatientPharmacyItems(new object[] { patientNumber, visit.invoice_number});
+                    var DDetails = await ms.GetPatientDiagnostics(new object[] { patientNumber, visit.invoice_number });
+                    var LDetails = await ms.GetPatientLabs(new object[] { patientNumber, visit.invoice_number });
+
+
+
+                    //consultations
+                    if (CDetails.Count() > 0)
+                    {
+
+                        foreach (var det in CDetails)
+                        {
+                            htmlString += @$"
+     <tr colspan='5'>
+        <td colspan='5'><h3><b>Consultation</b></h3></td>
+      </tr>
+        <tr>
+        <td>{det.Item}</td>";
+                            TotalBillable += det.Amount;
+                            htmlString += @$"<td>{det.Amount}</td>";
+                            htmlString += @$"<td>0</td>";
+
+                            htmlString += @$"
+        <td>-</td>
+        <td>1500</td>
+      </tr>
+";
+                        }
+                    }
+
+                    //lab
+                    if (LDetails.Count() > 0)
+                    {
+                        htmlString += @"
+<tr colspan='5'>
+        <td colspan='5'><h3><b>Laboratory</b></h3></td>
+      </tr>
+";
+                        foreach (var det in LDetails)
+                        {
+                            htmlString += @$"
+        <tr>
+        <td>{det.Item}</td>";
+                            TotalBillable += det.Amount;
+                            htmlString += @$"<td>{det.Amount}</td>";
+                            htmlString += @$"<td>0</td>";
+
+                            htmlString += @$"
+        <td>-</td>
+        <td>{det.Savings}</td>
+      </tr>
+";
+                        }
+                    }
+                    //diagnostics
+                    if (DDetails.Count() > 0)
+                    {
+                        htmlString += @"
+<tr colspan='5'>
+        <td colspan='5'><h3><b>Diagnostics</b></h3></td>
+      </tr>
+";
+                        foreach (var det in DDetails)
+                        {
+                            htmlString += @$"
+        <tr>
+        <td>{det.Item}</td>";
+                            TotalBillable += det.Amount;
+                            htmlString += @$"<td>{det.Amount}</td>";
+                            htmlString += @$"<td>0</td>";
+
+                            htmlString += @$"
+        <td>-</td>
+        <td>{det.Savings + det.Amount}</td>
+      </tr>
+";
+                        }
+                    }
+                    //Pharmacy
+                    if (PDetails.Count() > 0)
+                    {
+                        htmlString += @"
+<tr colspan='5'>
+        <td colspan='5'><h3><b>Pharmacy</b></h3></td>
+      </tr>
+";
+                        foreach (var det in PDetails)
+                        {
+                            htmlString += @$"
+        <tr>
+        <td>{det.Item}</td>";
+                            TotalNonBillable += det.Amount;
+                            htmlString += @$"<td>0</td>";
+                            htmlString += @$"<td>{det.Amount}</td>";
+                            htmlString += @$"
+        <td>0.0</td>
+        <td>{det.Savings}</td>
+      </tr>
+";
+                        }
+                    }
+                }
+
+
+                //other htmsls
+
+                htmlString += @$"
+
+ <tr>
+        <td colspan='5'></td>
+      </tr>
+	       <tr>
+        <td><h5><b>Non Payable</h5></b></td>
+        <td colspan='4'><b>{TotalBillable}</b></td>
+      </tr>
+	        <tr>
+        <td colspan='2'><h5><b>Payable</h5></b></td>
+        <td colspan='3'><b>{TotalNonBillable}</b></td>
+      </tr>
+	  
+	    <tr >
+        <td rowspan='2' colspan='1'><h5><b>Balance</h5></b></td>
+        <td rowspan='1'colspan='2'>Pharmacy</td>
+        <td rowspan='1'colspan='2'><b>0.0</b></td>
+      </tr>
+	  <tr>
+        <td colspan='2'> Non Pharmacy</td>
+		<td rowspan='1'colspan='2'><b>N/A</b></td>
+      </tr>
+         </tbody>
+  </table>
+</div>
+
+
+
+</div>
+             <div class='row'>
+</div>
+         </div>
+         </div>
+</div>
+</body>
+</html>
+";
+                string headerImage = @"C:\Certificate\Res\header.png";
+                PdfImageSection headerImg = new PdfImageSection(0, 0, 594, headerImage);
+                converter.Header.Add(headerImg);
+
+                string imgFile = @"C:\Certificate\Res\footer.png";
+                PdfImageSection img = new PdfImageSection(0, 0, 594, imgFile);
+                converter.Footer.Add(img);
+
+
+                PdfDocument doc = converter.ConvertHtmlString(htmlString);
+
+                PdfDocument doc1 = converter.ConvertHtmlString(htmlString);
+                // save pdf document
+
+                string fileLocation = @$"D:/Subscription/PatientUtilizationReport/{patientNumber}.pdf";
+                doc.Save(fileLocation);
+                // create memory stream to save PDF
+                MemoryStream pdfStream = new MemoryStream();
+                doc1.Save(pdfStream);
+                pdfStream.Position = 0;
+                //fetch email
+                //var email = await gen.GetEmailPhone(new object[] { cycle_id });
+                //string body = populateCovidEmailBody(email.Name);
+
+                //var gateway = new AfricasTalkingGateway(username, apikey);
+                //var phoneRegex = new Regex("^[a-zA-Z0-9 +]*$");
+                //string phoneto = email.Phone;
+                //string message = @$"Dear {email.Name}, Thank you for choosing Checkups Medical centre. Your visit financial report is ready and sent on registered email. For any assistance please call 0111050290";
+                //var sms = gateway.SendMessage("+254710226738", message, "CHECKUPS");
+
+
+            }
+            catch (Exception ex)
             {
 
             }
